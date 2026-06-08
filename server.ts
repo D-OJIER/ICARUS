@@ -1,43 +1,44 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
-import fs from 'fs';
-import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
 const PORT = 3000;
+
+function getAIModel() {
+  const model = process.env.AI_MODEL;
+  if (!model) {
+    throw new Error('AI_MODEL is not configured on the server.');
+  }
+  return model;
+}
 
 async function startServer() {
   const app = express();
 
   app.use(express.json());
 
-  // API Route for Gemini suggestion
-  app.post('/api/gemini/suggest', async (req, res) => {
+  // API Route for AI suggestion
+  app.post('/api/ai/suggest', async (req, res) => {
     try {
       const { description } = req.body;
       if (!description || typeof description !== 'string' || !description.trim()) {
         return res.status(400).json({ error: 'Description is required for prophetic formulation.' });
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.AI_API_KEY;
       if (!apiKey) {
-        return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server. Please bind it in Settings > Secrets.' });
+        return res.status(500).json({ error: 'AI_API_KEY is not configured on the server. Please bind it in Settings > Secrets.' });
       }
 
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
+            'User-Agent': 'icarus-local',
           }
         }
       });
@@ -45,7 +46,7 @@ async function startServer() {
       const promptStr = `Suggest a dramatic gothic/souls-like/dark fantasy ritualized version of this user-provided task description:\n"${description}"`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: getAIModel(),
         contents: promptStr,
         config: {
           systemInstruction: "You are an ancient, dramatic high scribe of the Altar of Vows. You translate modern/simple everyday activities and tasks (such as 'walk the dog', 'write a blog post', 'wash dishes', 'study React') into poetic, deep, gothic medieval souls-like RPG vows, trials, and penances. Return a structured JSON response matching the schema. For title, keep it short, intense, dramatic (e.g. 'Feral Companionship Pilgrimage' instead of 'walk the dog'). For description, write immersive gothic prose framing the task's deep ritual importance.",
@@ -109,23 +110,23 @@ async function startServer() {
   });
 
   // API Route for planning a structured grand goal
-  app.post('/api/gemini/plan-goal', async (req, res) => {
+  app.post('/api/ai/plan-goal', async (req, res) => {
     try {
       const { aspiration } = req.body;
       if (!aspiration || typeof aspiration !== 'string' || !aspiration.trim()) {
         return res.status(400).json({ error: 'Goal aspiration is required for progression planning.' });
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.AI_API_KEY;
       if (!apiKey) {
-        return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server. Please bind it in Settings > Secrets.' });
+        return res.status(500).json({ error: 'AI_API_KEY is not configured on the server. Please bind it in Settings > Secrets.' });
       }
 
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
+            'User-Agent': 'icarus-local',
           }
         }
       });
@@ -133,7 +134,7 @@ async function startServer() {
       const promptStr = `Analyze this user goal/habit and design a highly engaging, structured progression tree of vows: "${aspiration}"`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: getAIModel(),
         contents: promptStr,
         config: {
           systemInstruction: `You are the Grand Mentor of the Vow Keepers, an ancient sage.
@@ -250,23 +251,23 @@ CRITICAL REQUIREMENTS FOR SYSTEM INITIATION:
   });
 
   // API Route for planning a campaign-style weekly-milestone habit
-  app.post('/api/gemini/plan-habit', async (req, res) => {
+  app.post('/api/ai/plan-habit', async (req, res) => {
     try {
       const { description } = req.body;
       if (!description || typeof description !== 'string' || !description.trim()) {
         return res.status(400).json({ error: 'Habit description is required to plan thy progression covenant.' });
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.AI_API_KEY;
       if (!apiKey) {
-        return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server. Please bind it in Settings > Secrets.' });
+        return res.status(500).json({ error: 'AI_API_KEY is not configured on the server. Please bind it in Settings > Secrets.' });
       }
 
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
+            'User-Agent': 'icarus-local',
           }
         }
       });
@@ -274,7 +275,7 @@ CRITICAL REQUIREMENTS FOR SYSTEM INITIATION:
       const promptStr = `Plan a spectacular campaign-style dark fantasy Habit Progression for: "${description}"`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
+        model: getAIModel(),
         contents: promptStr,
         config: {
           systemInstruction: `You are the High Alchemist of Habits, a seasoned GM and master of dark fantasy RPG learning systems.
@@ -428,20 +429,20 @@ STRICT DESIGN RULES:
   });
 
   // API Route for persistent evaluation & customized coaching insights
-  app.post('/api/gemini/coach', async (req, res) => {
+  app.post('/api/ai/coach', async (req, res) => {
     try {
       const { quests, goals } = req.body;
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.AI_API_KEY;
       if (!apiKey) {
-        return res.status(550).json({ error: 'GEMINI_API_KEY is not bound on the server.' });
+        return res.status(550).json({ error: 'AI_API_KEY is not bound on the server.' });
       }
 
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
+            'User-Agent': 'icarus-local',
           }
         }
       });
@@ -459,7 +460,7 @@ STRICT DESIGN RULES:
       const auditPrompt = `Perform a highly specific, adaptive audit on this penitent person's ledger:\n${JSON.stringify(inputContext)}`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: getAIModel(),
         contents: auditPrompt,
         config: {
           systemInstruction: `You are the Ancient Grand Examiner of Virtues and Burdens. 
@@ -515,7 +516,7 @@ Return a structured JSON evaluation. Ensure prose is deeply evocative, gothic, s
   });
 
   // API Route for Day 40 habit cycle review report card
-  app.post('/api/gemini/habit-report', async (req, res) => {
+  app.post('/api/ai/habit-report', async (req, res) => {
     try {
       const { rootTitle, completedCount, totalCount, currentStreak, longestStreak, difficulty, averageCompletionRate, totalDaysInvested } = req.body;
 
@@ -523,16 +524,16 @@ Return a structured JSON evaluation. Ensure prose is deeply evocative, gothic, s
         return res.status(400).json({ error: 'Habit Title is required for the final liturgy.' });
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.AI_API_KEY;
       if (!apiKey) {
-        return res.status(550).json({ error: 'GEMINI_API_KEY is not configured.' });
+        return res.status(550).json({ error: 'AI_API_KEY is not configured.' });
       }
 
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
+            'User-Agent': 'icarus-local',
           }
         }
       });
@@ -548,7 +549,7 @@ Return a structured JSON evaluation. Ensure prose is deeply evocative, gothic, s
 `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: getAIModel(),
         contents: reportPrompt,
         config: {
           systemInstruction: `You are the High Inquisitor of completed Vows.
@@ -610,23 +611,23 @@ Return a structured JSON response fitting the schema exactly. Keep the tone sole
   });
 
   // API Route for Conversational Habit Evolution & Intelligent level morphing via Chat in ProgressTab
-  app.post('/api/gemini/habit-evolve-chat', async (req, res) => {
+  app.post('/api/ai/habit-evolve-chat', async (req, res) => {
     const { rootTitle, message, completedCount, totalCount, currentStreak, longestStreak, difficulty, chatHistory } = req.body || {};
     try {
       if (!rootTitle) {
         return res.status(400).json({ error: 'Habit Title is required for chat evolution.' });
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.AI_API_KEY;
       if (!apiKey) {
-        return res.status(550).json({ error: 'GEMINI_API_KEY is not configured.' });
+        return res.status(550).json({ error: 'AI_API_KEY is not configured.' });
       }
 
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
+            'User-Agent': 'icarus-local',
           }
         }
       });
@@ -654,7 +655,7 @@ Your duty is to:
 Ensure the reply is evocative, gothic, souls-themed. Keep the response to the point, beautiful, and atmospheric.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: getAIModel(),
         contents: `Chat message: "${message || ''}"\nPrevious history: ${JSON.stringify(chatHistory || [])}`,
         config: {
           systemInstruction: systemMessage,
@@ -718,7 +719,7 @@ Ensure the reply is evocative, gothic, souls-themed. Keep the response to the po
   });
 
   // API Route for Conversational Habit Evolution & Intelligent level morphing
-  app.post('/api/gemini/habit-evolve', async (req, res) => {
+  app.post('/api/ai/habit-evolve', async (req, res) => {
     try {
       const { rootTitle, description, difficulty, completionRate, action, message } = req.body;
 
@@ -726,16 +727,16 @@ Ensure the reply is evocative, gothic, souls-themed. Keep the response to the po
         return res.status(400).json({ error: 'Habit Title is required for evolution.' });
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.AI_API_KEY;
       if (!apiKey) {
-        return res.status(550).json({ error: 'GEMINI_API_KEY is not configured.' });
+        return res.status(550).json({ error: 'AI_API_KEY is not configured.' });
       }
 
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
+            'User-Agent': 'icarus-local',
           }
         }
       });
@@ -770,7 +771,7 @@ Your duty is to:
 3. Formulate a majestic, encouraging, atmospheric gothic coach response detailing their transformation. State why it transitioned, and read their feedback with deep mystical wisdom. Keep descriptions tight and beautiful.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: getAIModel(),
         contents: `Evolve the habit based on user input message: "${message || ''}" and action "${action || 'none'}"`,
         config: {
           systemInstruction: systemMessage,
@@ -868,20 +869,20 @@ Your duty is to:
   });
 
   // API Route for comprehensive Character Profile performance assessment
-  app.post('/api/gemini/profile-assess', async (req, res) => {
+  app.post('/api/ai/profile-assess', async (req, res) => {
     try {
       const { name, title, xp, stats, chronicle, unlockedSkillsCount, unlockedAchievementsCount, completedQuests } = req.body;
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.AI_API_KEY;
       if (!apiKey) {
-        return res.status(550).json({ error: 'GEMINI_API_KEY is not configured.' });
+        return res.status(550).json({ error: 'AI_API_KEY is not configured.' });
       }
 
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
+            'User-Agent': 'icarus-local',
           }
         }
       });
@@ -932,7 +933,7 @@ CRITICAL GOVERNMENT PRINCIPLES:
 Return a structured JSON. Do not include markdown code block formats in the outer body, return pure JSON.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: getAIModel(),
         contents: `Evaluate the pilgrim character performance:\n${promptContext}`,
         config: {
           systemInstruction: systemMessage,
@@ -1004,322 +1005,6 @@ Return a structured JSON. Do not include markdown code block formats in the oute
   });
 
   // ==========================================
-  // ICARUS Authentication & Onboarding System
-  // ==========================================
-  const DATA_DIR = path.join(process.cwd(), 'data');
-  const USERS_FILE = path.join(DATA_DIR, 'users.json');
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify([]));
-  }
-
-  // Helper to read users from secure storage
-  const readUsers = (): any[] => {
-    try {
-      const data = fs.readFileSync(USERS_FILE, 'utf-8');
-      return JSON.parse(data);
-    } catch (e) {
-      return [];
-    }
-  };
-
-  // Helper to write users into secure storage
-  const writeUsers = (users: any[]): void => {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
-  };
-
-  // 1. REGISTER PROFILE
-  app.post('/api/auth/register', (req, res) => {
-    try {
-      const { display_name, email, password, preferred_name, date_of_birth, timezone } = req.body;
-      
-      if (!display_name || !email || !password) {
-        return res.status(400).json({ error: "Display name, email, and password are required to carve thy registry." });
-      }
-
-      const users = readUsers();
-      if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-        return res.status(400).json({ error: "The spiritual signature of this email is already bound to ICARUS. Seek thy previous path." });
-      }
-
-      const userId = `icarus-usr-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const passwordHash = bcrypt.hashSync(password, 10);
-      const signupDate = new Date().toISOString();
-
-      const geometrySeed = Math.floor(Math.random() * 10000000);
-      const monumentSeed = `monument-${userId}-${Math.floor(Math.random() * 999999)}`;
-      const startingTitle = preferred_name ? preferred_name : "The Wanderer";
-
-      // Build initial default character state with specified default stats
-      const characterProfile = {
-        id: userId,
-        name: display_name,
-        title: startingTitle,
-        xp: 0,
-        accountCreated: signupDate,
-        preferredName: preferred_name || "The Wanderer",
-        dateOfBirth: date_of_birth || "",
-        timezone: timezone || "UTC",
-        avatarSeed: String(geometrySeed),
-        monumentSeed: monumentSeed,
-        created_at: signupDate,
-        stats: {
-          strength: 10,
-          endurance: 10,
-          discipline: 10,
-          recovery: 10,
-          focus: 10,
-          consistency: 10,
-          learningSpeed: 10,
-          resilience: 10,
-          programming: 10,
-          mathematics: 10,
-          finance: 10,
-          communication: 10,
-          creativity: 10,
-          leadership: 10,
-          networking: 10,
-          collaboration: 10
-        },
-        chronicle: [
-          {
-            id: `chron-init-${Date.now()}`,
-            timeframe: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
-            bullets: [
-              `Entered the domain of ICARUS as ${display_name} (${startingTitle}).`,
-              `Swore initial mental and physical covenants under starting seed ${geometrySeed}.`
-            ]
-          }
-        ],
-        skillTrees: [
-          {
-            category: 'Programming',
-            nodes: [
-              { id: 'prog-fund', name: 'Programming Fundamentals', description: 'Core principles: logic, types, flow controls', level: 0, maxLevel: 1, status: 'available', xp: 0, requiredXp: 100, prerequisites: [] },
-              { id: 'prog-java', name: 'Java Sanctuary', description: 'Strong, robust types & compilations', level: 0, maxLevel: 3, status: 'locked', xp: 0, requiredXp: 200, prerequisites: ['prog-fund'] },
-              { id: 'prog-oop', name: 'OOP & Collections', description: 'Polymorphism and efficient structures', level: 0, maxLevel: 3, status: 'locked', xp: 0, requiredXp: 300, prerequisites: ['prog-java'] },
-              { id: 'prog-spring', name: 'Spring Boot Castle', description: 'Enterprise backend orchestration', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 500, prerequisites: ['prog-oop'] },
-              { id: 'prog-front', name: 'Frontend Guild', description: 'Inscribing direct canvas styles: HTML & CSS', level: 0, maxLevel: 1, status: 'locked', xp: 0, requiredXp: 150, prerequisites: ['prog-fund'] },
-              { id: 'prog-react', name: 'React Componentry', description: 'Unifying flows with UI hooks and state', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 350, prerequisites: ['prog-front'] },
-              { id: 'prog-next', name: 'NextJS Realm', description: 'Server-side pre-rendering & asset portals', level: 0, maxLevel: 4, status: 'locked', xp: 0, requiredXp: 450, prerequisites: ['prog-react'] },
-              { id: 'prog-ai', name: 'AI Engineering', description: 'Communicating with celestial neural oracles', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 500, prerequisites: ['prog-fund'] }
-            ]
-          },
-          {
-            category: 'Fitness',
-            nodes: [
-              { id: 'fit-will', name: 'Ritual of Will', description: 'Initiating physical focus parameters', level: 0, maxLevel: 1, status: 'available', xp: 0, requiredXp: 100, prerequisites: [] },
-              { id: 'fit-run', name: 'Swift Sentinel Running', description: 'Enhance heart longevity & aerobic speed', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 200, prerequisites: ['fit-will'] },
-              { id: 'fit-strength', name: 'Iron Forging', description: 'Power training, compound weights and calisthenics', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 250, prerequisites: ['fit-will'] },
-              { id: 'fit-mobility', name: 'Shadow Reflexes', description: 'Stretching, joints, and spine protection guidance', level: 0, maxLevel: 3, status: 'locked', xp: 0, requiredXp: 180, prerequisites: ['fit-will'] },
-              { id: 'fit-nutrition', name: 'Herbology Alchemy', description: 'Proper fasting windows and metabolic clean intake', level: 0, maxLevel: 3, status: 'locked', xp: 0, requiredXp: 200, prerequisites: ['fit-will'] }
-            ]
-          },
-          {
-            category: 'Personal Development',
-            nodes: [
-              { id: 'dev-wake', name: 'Dawn Vigil', description: 'Conquer early morning shadows', level: 0, maxLevel: 1, status: 'available', xp: 0, requiredXp: 100, prerequisites: [] },
-              { id: 'dev-time', name: 'Hour Dial Management', description: 'Rigid blocks of deep focused concentration', level: 0, maxLevel: 4, status: 'locked', xp: 0, requiredXp: 180, prerequisites: ['dev-wake'] },
-              { id: 'dev-read', name: 'Scroll Reading studies', description: 'Continuous absorption of mystical volumes', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 150, prerequisites: ['dev-wake'] },
-              { id: 'dev-habit', name: 'Chain of Iron Habits', description: 'Lock in standard repetition frequencies', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 200, prerequisites: ['dev-wake'] },
-              { id: 'dev-journal', name: 'Annals Inscription', description: 'Daily journaling & high spiritual reflecting', level: 0, maxLevel: 3, status: 'locked', xp: 0, requiredXp: 120, prerequisites: ['dev-wake'] }
-            ]
-          }
-        ],
-        achievements: [
-          { id: 'ach-first', name: 'First Liturgical Duty', description: 'Inscribe and complete your very first Vow.', category: 'Discipline', rarity: 'Common', unlocked: false },
-          { id: 'ach-habit-heavy', name: 'Alchemical Crusader', description: 'Survive a 40-Day continuous Habit Cycle without break.', category: 'Productivity', rarity: 'Epic', unlocked: false },
-          { id: 'ach-gym-god', name: 'Vessel of Agony', description: 'Demonstrate supreme athletic grit under hard trial severe burdens.', category: 'Fitness', rarity: 'Legendary', unlocked: false },
-          { id: 'ach-react-m', name: 'Developer Guild Master', description: 'Fully master Frontend or AI components inside Programming.', category: 'Learning', rarity: 'Rare', unlocked: false },
-          { id: 'ach-fire-k', name: 'bonfire Guardian', description: 'Gather and maintain high streak counts above 10.', category: 'Discipline', rarity: 'Common', unlocked: false },
-          { id: 'ach-complete-all', name: 'The Miracle Absolute', description: 'Earn 30,000 XP in your records.', category: 'Mastery', rarity: 'Mythic', unlocked: false }
-        ],
-        earnedTitles: [startingTitle]
-      };
-
-      const newUser = {
-        id: userId,
-        email: email.toLowerCase(),
-        password_hash: passwordHash,
-        display_name,
-        preferred_name: preferred_name || "",
-        date_of_birth: date_of_birth || "",
-        timezone: timezone || "UTC",
-        level: 1,
-        xp: 0,
-        title: startingTitle,
-        avatar_seed: String(geometrySeed),
-        monument_seed: monumentSeed,
-        created_at: signupDate,
-        quests: [
-          {
-            id: `init-${userId}-1`,
-            title: 'Reflect in the Hall of Seeds',
-            description: 'Stand in silent witness to thy brand new ICARUS character alignment.',
-            difficulty: 'Lesser Burden',
-            category: 'Vow',
-            completed: false,
-            createdAt: signupDate
-          }
-        ],
-        goals: [],
-        characterProfile
-      };
-
-      users.push(newUser);
-      writeUsers(users);
-
-      return res.status(201).json({
-        id: newUser.id,
-        email: newUser.email,
-        display_name: newUser.display_name,
-        preferred_name: newUser.preferred_name,
-        date_of_birth: newUser.date_of_birth,
-        timezone: newUser.timezone,
-        level: newUser.level,
-        xp: newUser.xp,
-        title: newUser.title,
-        avatar_seed: newUser.avatar_seed,
-        monument_seed: newUser.monument_seed,
-        created_at: newUser.created_at,
-        quests: newUser.quests,
-        goals: newUser.goals,
-        characterProfile: newUser.characterProfile
-      });
-
-    } catch (error: any) {
-      console.error("Error in registration:", error);
-      return res.status(500).json({ error: "Ethereal void blockages during character registration: " + error.message });
-    }
-  });
-
-  // 2. LOGIN
-  app.post('/api/auth/login', (req, res) => {
-    try {
-      const { email, password } = req.body;
-      if (!email || !password) {
-        return res.status(400).json({ error: "Email & Password seals are required to verify thy presence." });
-      }
-
-      const users = readUsers();
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-      if (!user) {
-        return res.status(401).json({ error: "Thy email remains unknown to the monument records." });
-      }
-
-      const match = bcrypt.compareSync(password, user.password_hash);
-      if (!match) {
-        return res.status(401).json({ error: "Thy password seal is broken or impure. Enter the correct sigil." });
-      }
-
-      return res.json({
-        id: user.id,
-        email: user.email,
-        display_name: user.display_name,
-        preferred_name: user.preferred_name,
-        date_of_birth: user.date_of_birth,
-        timezone: user.timezone,
-        level: user.level,
-        xp: user.xp,
-        title: user.title,
-        avatar_seed: user.avatar_seed,
-        monument_seed: user.monument_seed,
-        created_at: user.created_at,
-        quests: user.quests,
-        goals: user.goals,
-        characterProfile: user.characterProfile
-      });
-
-    } catch (error: any) {
-      console.error("Error in login:", error);
-      return res.status(500).json({ error: "Shattered connection to the high registry: " + error.message });
-    }
-  });
-
-  // 3. SECURE PASS RESET
-  app.post('/api/auth/reset', (req, res) => {
-    try {
-      const { email, new_password, timezone } = req.body;
-      if (!email || !new_password) {
-        return res.status(400).json({ error: "Email & brand new password sigil is required to reset thy covenant." });
-      }
-
-      const users = readUsers();
-      const userIdx = users.findIndex(u => u.email.toLowerCase() === email.toLowerCase());
-
-      if (userIdx === -1) {
-        return res.status(404).json({ error: "No recorded pilgrim carries this email profile." });
-      }
-
-      // Timezone is acting as a temporal alignment signature check
-      if (timezone && users[userIdx].timezone && users[userIdx].timezone !== timezone) {
-        return res.status(400).json({ error: "Temporal timezone alignment failed. Thy temporal timezone doesn't match our records." });
-      }
-
-      users[userIdx].password_hash = bcrypt.hashSync(new_password, 10);
-      writeUsers(users);
-
-      return res.json({ message: "Thy sacred password has been reset successfully. Re-enter the path." });
-
-    } catch (error: any) {
-      console.error("Error in reset:", error);
-      return res.status(500).json({ error: "Failed to align password seals: " + error.message });
-    }
-  });
-
-  // 4. DATA SYNC (Saves active client state to server for persistence across refresh/login)
-  app.post('/api/auth/sync', (req, res) => {
-    try {
-      const { userId, quests, goals, characterProfile } = req.body;
-      if (!userId) {
-        return res.status(400).json({ error: "An active user identity is required for synchronization." });
-      }
-
-      const users = readUsers();
-      const userIdx = users.findIndex(u => u.id === userId);
-
-      if (userIdx === -1) {
-        return res.status(404).json({ error: "Covenant user not found in the temple archives." });
-      }
-
-      // Sync active state parameters
-      if (quests) users[userIdx].quests = quests;
-      if (goals) users[userIdx].goals = goals;
-      if (characterProfile) {
-        users[userIdx].characterProfile = {
-          ...users[userIdx].characterProfile,
-          ...characterProfile
-        };
-        // Update top-level values
-        users[userIdx].xp = characterProfile.xp || 0;
-        users[userIdx].level = Math.floor((characterProfile.xp || 0) / 1000) + 1;
-        users[userIdx].title = characterProfile.title || users[userIdx].title;
-      }
-
-      writeUsers(users);
-      return res.json({ status: "sync_complete", level: users[userIdx].level, xp: users[userIdx].xp });
-
-    } catch (error: any) {
-      console.error("Error in syncing state:", error);
-      return res.status(500).json({ error: "Failing to write character alignment into the crypt archives: " + error.message });
-    }
-  });
-
-  // 5. DATA PURGE & ADMINISTRATIVE WIPE (Clears all registered server fallback users on the disk)
-  app.post('/api/auth/wipe-all', (req, res) => {
-    try {
-      writeUsers([]);
-      console.log("All registered users and local server-side files have been completely wiped.");
-      return res.json({ status: "wipe_complete", message: "All server registered records have been wiped to ashes." });
-    } catch (error: any) {
-      console.error("Error in wiping users state:", error);
-      return res.status(500).json({ error: "Failed to purge users archives: " + error.message });
-    }
-  });
-
   // Serve static files in production vs middleware mode in development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

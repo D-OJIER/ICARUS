@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import { QuestDifficulty, QuestCategory, Quest } from '../types';
 import { getLocalDateString, getTodayLocalDateString } from './dateUtils';
 
@@ -588,7 +583,7 @@ export function addChronicleLog(profile: CharacterProfile, text: string) {
   currentMonthEntry.bullets.unshift(text);
 }
 
-// Master global purge & complete database wipe of AI Studio Local state
+// Master global purge & complete database wipe of ICARUS Local state
 export function purgePerfectGothicState() {
   localStorage.clear();
   sessionStorage.clear();

@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 // Procedural sound effects using Web Audio API to prevent external file dependencies
 class AudioSynth {
   private ctx: AudioContext | null = null;

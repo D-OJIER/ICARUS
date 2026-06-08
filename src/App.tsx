@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -31,9 +26,7 @@ import { ShieldAlert, RefreshCw, User, Flame } from 'lucide-react';
 import { calculateDayContext, getContextAwareQuote } from './utils/contextAwareEngine';
 import { DailyMonument } from './components/DailyMonument';
 import { IcarusAuthPortal } from './components/IcarusAuthPortal';
-import { db, auth } from './lib/firebase';
-import { doc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
+import { deleteGoal, deleteQuest, deleteQuests, purgeUserData, saveGoals, saveQuests, saveUserProfile, signOutOfSupabase } from './lib/supabase';
 
 export default function App() {
   // Authentication State
@@ -139,13 +132,9 @@ export default function App() {
     const timer = setTimeout(async () => {
       try {
         const userId = currentUser.id;
-        // Direct Client-Side Firestore synchronization of quests
-        const promises = quests.map(q => 
-          setDoc(doc(db, "users", userId, "quests", q.id), q)
-        );
-        await Promise.all(promises);
+        await saveQuests(userId, quests);
       } catch (err) {
-        console.warn("Background Firestore quests sync delay: ", err);
+        console.warn("Background Supabase quests sync delay: ", err);
       }
     }, 1200);
     return () => clearTimeout(timer);
@@ -162,13 +151,9 @@ export default function App() {
     const timer = setTimeout(async () => {
       try {
         const userId = currentUser.id;
-        // Direct Client-Side Firestore synchronization of goals/campaigns
-        const promises = goals.map(g => 
-          setDoc(doc(db, "users", userId, "goals", g.id), g)
-        );
-        await Promise.all(promises);
+        await saveGoals(userId, goals);
       } catch (err) {
-        console.warn("Background Firestore goals sync delay: ", err);
+        console.warn("Background Supabase goals sync delay: ", err);
       }
     }, 1200);
     return () => clearTimeout(timer);
@@ -181,8 +166,7 @@ export default function App() {
     const timer = setTimeout(async () => {
       try {
         const userId = currentUser.id;
-        // Direct Client-Side Firestore synchronization of the user profile record
-        await setDoc(doc(db, "users", userId), {
+        await saveUserProfile({
           id: userId,
           email: currentUser.email || "",
           display_name: currentUser.display_name || "",
@@ -196,9 +180,9 @@ export default function App() {
           monument_seed: characterProfile.monumentSeed || "",
           created_at: characterProfile.accountCreated || new Date().toISOString(),
           characterProfile: characterProfile
-        }, { merge: true });
+        });
       } catch (err) {
-        console.warn("Background Firestore profile sync delay: ", err);
+        console.warn("Background Supabase profile sync delay: ", err);
       }
     }, 1200);
     return () => clearTimeout(timer);
@@ -345,7 +329,7 @@ export default function App() {
   // Delete / Purge Vow
   const handleDeleteQuest = (id: string) => {
     if (currentUser) {
-      deleteDoc(doc(db, "users", currentUser.id, "quests", id)).catch(err => console.warn(err));
+      deleteQuest(currentUser.id, id).catch(err => console.warn(err));
     }
     setQuests(prev => prev.filter(q => q.id !== id));
   };
@@ -361,14 +345,10 @@ export default function App() {
       const regex = new RegExp(`^(⚔️|⚔)\\s*\\[${escapedTitle}\\]`, 'i');
       
       if (currentUser) {
-        // Cascade delete from firestore
-        deleteDoc(doc(db, "users", currentUser.id, "goals", goalId)).catch(err => console.warn(err));
+        deleteGoal(currentUser.id, goalId).catch(err => console.warn(err));
         
-        // Find matched quests to delete from Firestore
         const questsToDelete = quests.filter(q => regex.test(q.title));
-        questsToDelete.forEach(q => {
-          deleteDoc(doc(db, "users", currentUser.id, "quests", q.id)).catch(err => console.warn(err));
-        });
+        deleteQuests(currentUser.id, questsToDelete.map(q => q.id)).catch(err => console.warn(err));
       }
 
       // Cascade delete associated calendar tasks and task instances
@@ -393,9 +373,7 @@ export default function App() {
     soundEngine.playClick();
     if (currentUser) {
       const completedList = quests.filter(q => q.completed);
-      completedList.forEach(q => {
-        deleteDoc(doc(db, "users", currentUser.id, "quests", q.id)).catch(err => console.warn(err));
-      });
+      deleteQuests(currentUser.id, completedList.map(q => q.id)).catch(err => console.warn(err));
     }
     setQuests(prev => prev.filter(q => !q.completed));
   };
@@ -585,7 +563,7 @@ export default function App() {
       { id: "typescript", keywords: ["typescript", "ts", "types", "interfaces", "generics", "type-safety", "compiler"], nodeId: "prog-ts" },
       { id: "database", keywords: ["database", "sql", "postgresql", "query", "schema", "indexing", "joins", "migrations"], nodeId: "prog-db" },
       { id: "algorithms", keywords: ["algorithm", "data structure", "leetcode", "complexity", "big o", "sorting", "binary", "recursion"], nodeId: "prog-algo" },
-      { id: "ai_engineering", keywords: ["ai", "prompt", "llm", "gemini", "openai", "rag", "agents", "machine learning"], nodeId: "prog-ai" },
+      { id: "ai_engineering", keywords: ["ai", "prompt", "llm", "model", "openai", "rag", "agents", "machine learning"], nodeId: "prog-ai" },
       { id: "reading", keywords: ["read", "reading", "book", "scroll", "literature", "article", "paper", "newsletter"], nodeId: "dev-read" },
       { id: "time_management", keywords: ["time", "focus", "block", "pomodoro", "hour", "intervals", "distraction", "calendar", "deep"], nodeId: "dev-time" },
       { id: "habit_consistency", keywords: ["habit", "routine", "streak", "daily", "consistency", "discipline", "rituals"], nodeId: "dev-habit" },
@@ -1128,29 +1106,9 @@ export default function App() {
                         if (resetConfirmationText === 'CONFIRM RESET') {
                           soundEngine.playSoulsClaimed();
                           try {
-                            // 1. Send administrative wipe request to the backend server to clear local registry
-                            await fetch('/api/auth/wipe-all', { method: 'POST' }).catch(err => {
-                              console.warn("Backend local database wipe skip:", err);
-                            });
-
-                            // 2. Clear real Firestore records for the active logged-in user
                             if (currentUser && currentUser.id) {
-                              const userId = currentUser.id;
-                              
-                              // Clear subcollections
-                              const questsSnap = await getDocs(collection(db, "users", userId, "quests"));
-                              const questDeletes = questsSnap.docs.map(doc => deleteDoc(doc.ref));
-                              await Promise.all(questDeletes);
-                              
-                              const goalsSnap = await getDocs(collection(db, "users", userId, "goals"));
-                              const goalDeletes = goalsSnap.docs.map(doc => deleteDoc(doc.ref));
-                              await Promise.all(goalDeletes);
-                              
-                              // Delete main doc
-                              await deleteDoc(doc(db, "users", userId));
-                              
-                              // Sign out
-                              await signOut(auth);
+                              await purgeUserData(currentUser.id);
+                              await signOutOfSupabase();
                             }
                           } catch (err) {
                             console.error("Failed to fully purge database documents: ", err);
@@ -1182,7 +1140,7 @@ export default function App() {
             Sorrowful be the heart, Penitent Ashen Knight
           </p>
           <p className="font-mono text-[8px] text-gray-700 uppercase tracking-widest mt-1">
-            Pure Dark Todo • Inspired by Blasphemous, Dark Souls & Hollow Knight • Generated entirely using Vectors & Synthesized Web Chimes.
+            ICARUS • Ancient ruin progression engine • Procedural monuments, vows, and synthesized chimes.
           </p>
         </footer>
 

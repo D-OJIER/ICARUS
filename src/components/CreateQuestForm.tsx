@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Skull, Feather } from 'lucide-react';
@@ -49,7 +44,7 @@ export const CreateQuestForm: React.FC<CreateQuestFormProps> = ({ onAddQuest, pr
     soundEngine.playClick();
 
     try {
-      const res = await fetch('/api/gemini/suggest', {
+      const res = await fetch('/api/ai/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: inputSeed })

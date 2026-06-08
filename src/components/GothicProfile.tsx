@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -229,7 +224,7 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
         id: "ai",
         name: "AI Engineering",
         domain: "Programming",
-        keywords: ["ai", "gemini", "prompt", "model", "neural", "oracle", "nlp", "vector", "api", "scribe", "alchemical assessment"],
+        keywords: ["ai", "ai", "prompt", "model", "neural", "oracle", "nlp", "vector", "api", "scribe", "alchemical assessment"],
         contributesTo: ["Programming", "Learning Speed", "Creativity"],
         description: "Synthesizing generative AI prompt matrices and orchestrating semantic flows.",
         recommendation: "Implement automated pipeline feedback loops and streaming JSON responses.",
@@ -584,7 +579,7 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
     const completedQuestsList = quests.filter(q => q.completed);
 
     try {
-      const response = await fetch('/api/gemini/profile-assess', {
+      const response = await fetch('/api/ai/profile-assess', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

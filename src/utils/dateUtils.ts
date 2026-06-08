@@ -1,9 +1,4 @@
 /**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-/**
  * Safely converts a Date object to local YYYY-MM-DD string without timezone shifting.
  */
 export function getLocalDateString(date: Date): string {

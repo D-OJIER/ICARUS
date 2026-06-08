@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -22,19 +17,7 @@ import {
   Award
 } from 'lucide-react';
 import { Goal, Quest } from '../types';
-import { auth, db } from '../lib/firebase';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  sendPasswordResetEmail
-} from 'firebase/auth';
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  collection, 
-  getDocs 
-} from 'firebase/firestore';
+import { loadUserBundle, saveGoal, saveQuests, saveUserProfile, sendPasswordReset, signInWithPassword, signUpWithPassword } from '../lib/supabase';
 
 interface IcarusAuthPortalProps {
   onLoginSuccess: (userData: {
@@ -143,26 +126,8 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     setIsLoading(true);
     setErrorStatus('');
     try {
-      // 1. Sign in with Firebase Authentication
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      const userId = user.uid;
-
-      // 2. Fetch User Profile Doc from Firestore
-      const userDocRef = doc(db, "users", userId);
-      const userDocSnap = await getDoc(userDocRef);
-      if (!userDocSnap.exists()) {
-        throw new Error('Thy character ledger was not found. Contact the scribes.');
-      }
-
-      const userData = userDocSnap.data() as any;
-
-      // 3. Retrieve Subcollection lists of Quests and Goals (Campaigns)
-      const questsSnap = await getDocs(collection(db, "users", userId, "quests"));
-      const goalsSnap = await getDocs(collection(db, "users", userId, "goals"));
-
-      userData.quests = questsSnap.docs.map(doc => doc.data() as Quest);
-      userData.goals = goalsSnap.docs.map(doc => doc.data() as Goal);
+      const user = await signInWithPassword(email, password);
+      const userData = await loadUserBundle(user.id, user.email || email);
 
       soundEngine.playQuestIgnite();
       onLoginSuccess(userData);
@@ -196,17 +161,15 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
 
     setIsLoading(true);
     try {
-      // 1. Create User in Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      const userId = user.uid;
+      const user = await signUpWithPassword(email, password);
+      const userId = user.id;
       const signupDate = new Date().toISOString();
 
       const geometrySeed = Math.floor(Math.random() * 10000000);
       const monumentSeed = `monument-${userId}-${Math.floor(Math.random() * 999999)}`;
       const startingTitle = preferredName ? preferredName : "The Wanderer";
 
-      // 2. Build initial character template details
+      // 2. Build initial character details
       const characterProfile = {
         id: userId,
         name: displayName,
@@ -312,15 +275,14 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
         characterProfile
       };
 
-      // 3. Save core user payload inside Firestore
-      await setDoc(doc(db, "users", userId), newUserPayload);
+      await saveUserProfile(newUserPayload);
 
       soundEngine.playQuestInscribe();
       setRegisteredUserResponse(newUserPayload);
       setCharGenStep(0);
       setMode('GENERATING_CHAR');
     } catch (err: any) {
-      setErrorStatus(err.message || 'Firebase Registration Failure.');
+      setErrorStatus(err.message || 'Registration failed.');
     } finally {
       setIsLoading(false);
     }
@@ -336,7 +298,7 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     setIsLoading(true);
     setErrorStatus('');
     try {
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordReset(email);
       setSuccessMessage('Thy reset scroll has been sent to thy email address.');
       setTimeout(() => {
         setMode('LOGIN');
@@ -357,7 +319,7 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     setIsLoading(true);
     setErrorStatus('');
     try {
-      const res = await fetch('/api/gemini/plan-goal', {
+      const res = await fetch('/api/ai/plan-goal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ aspiration: firstAspiration })
@@ -427,26 +389,20 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
         }
 
         try {
-          // 4. Save campaign and quests in separate Firestore database collections!
           const userId = finalUserPayload.id;
           const batchPromises: Promise<any>[] = [];
           
-          batchPromises.push(setDoc(doc(db, "users", userId, "goals", plannedCampaign.id), plannedCampaign));
-          
-          onboardingQuests.forEach(q => {
-            batchPromises.push(setDoc(doc(db, "users", userId, "quests", q.id), q));
-          });
-          
-          // Save user profile state
-          batchPromises.push(setDoc(doc(db, "users", userId), {
+          batchPromises.push(saveGoal(userId, plannedCampaign));
+          batchPromises.push(saveQuests(userId, onboardingQuests));
+          batchPromises.push(saveUserProfile({
             ...finalUserPayload,
-            quests: [], // keep root array empty on firestore as it's modeled in subcollections
+            quests: [],
             goals: []
           }));
           
           await Promise.all(batchPromises);
         } catch (dbErr) {
-          console.error("Failed writing onboarding data to Firestore: ", dbErr);
+          console.error("Failed writing onboarding data to Supabase: ", dbErr);
         } finally {
           setIsLoading(false);
         }

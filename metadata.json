@@ -1,6 +1,6 @@
 {
-  "name": "Dark Gothic Todo List",
-  "description": "An atmospheric, highly immersive todo lists with dark gothic aesthetics inspired by Dark Souls, Blasphemous, and Hollow Knight, featuring custom vector-animated bonfires, penance boards, and nail-slashing effects.",
+  "name": "ICARUS",
+  "description": "An AI-powered personal progression system with campaign-based growth, dynamic skill discovery, living character progression, and procedural ruin visuals.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": ["SERVER_SIDE_AI", "SUPABASE_AUTH", "SUPABASE_POSTGRES"]
 }

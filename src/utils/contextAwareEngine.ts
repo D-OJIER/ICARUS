@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import { Goal, Quest, DarkQuote } from '../types';
 import { CharacterProfile } from './progressionUtils';
 

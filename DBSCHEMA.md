@@ -1,110 +1,29 @@
-# 🏛️ ICARUS Database Schema & Architecture Guide
+# ICARUS Database Schema
 
-This document defines the complete structural database model, data properties, and collection relationships utilized within the **ICARUS Gothic Progress Tracker** ecosystem. The data is persisted on **Google Cloud Firestore** (using a highly secure, tenant-isolated schema with rigid subcollections) backed by **Firebase Authentication** for user identity management.
+ICARUS uses Supabase PostgreSQL with Supabase Auth for email/password accounts. User data is tenant-isolated through Row Level Security policies that compare each row's `user_id` or profile `id` to `auth.uid()`.
 
----
+## Core Tables
 
-## 🗺️ Architectural Topology
+`users` stores the living character profile, account metadata, XP, level, title, seeds, timezone, and the rich `character_profile` JSON payload used by the frontend.
 
-Firestore operates as a document-based NoSQL database. Inside ICARUS, we have structured this as a **hierarchical tree** anchored under individual authenticated accounts (`userId`), preventing query leakage and assuring bulletproof zero-trust user isolation.
+`quests` stores daily vows and tasks. Each row includes normalized fields for filtering plus a `data` JSON payload that preserves the full client-side quest object.
+
+`goals` stores campaign-based growth plans. Each row includes normalized status, category, resources, and a `data` JSON payload for the full campaign object.
+
+`goal_stages` and `goal_tasks` normalize campaign structure for reporting, indexing, and future analytics.
+
+`user_stats`, `user_skill_nodes`, `user_achievements`, `user_chronicle`, and `user_earned_titles` model the RPG progression layer.
+
+## Security
+
+All tables have Row Level Security enabled. Authenticated users can only read, insert, update, or delete records attached to their own Supabase Auth user ID.
+
+## Migration
+
+Apply the schema from:
 
 ```text
-/users (Collection)
-  └── {userId} (Document: User Profile)
-        ├── /quests (Subcollection)
-        │     └── {questId} (Document: Gothic Quest Record)
-        └── /goals (Subcollection)
-              └── {goalId} (Document: Campaign Objective)
+supabase/migrations/001_icarus_schema.sql
 ```
 
----
-
-## 🗃️ Collection (Table) Deep-Dive
-
-### 1. `users` Collection
-* **Path**: `/users/{userId}`
-* **Description**: Holds each pilgrim's primary character records, experience counters, custom titles, static attributes, and skill parameters.
-* **Primary Key (`userId`)**: Maps directly to the Firebase Authentication UID.
-
-#### Schema Fields:
-| Property Name | Type | Description | Required |
-| :--- | :--- | :--- | :--- |
-| `id` | `string` | Unique identifier matching Firebase Auth UID | Yes |
-| `name` | `string` | Chosen public name/tag | Yes |
-| `preferred_name` | `string` | Personalized name shown in UI greetings | No |
-| `title` | `string` | The currently equipped active title | Yes |
-| `xp` | `integer` | Total historical experience points earned | Yes |
-| `streak` | `integer` | Current active consecutive day alignment streak | Yes |
-| `avatar_seed` | `string` | Random numeric seed for the procedural geometry avatar | Yes |
-| `monument_seed` | `string` | Unique layout seed for the daily alignment monument | Yes |
-| `date_of_birth` | `string` | User's birthday | No |
-| `timezone` | `string` | Local timezone (e.g., "America/New_York", "UTC") | No |
-| `created_at` | `string` | ISO Date string of registration time | Yes |
-| `stats` | `map / object` | Core attributes. Includes strength, endurance, discipline, focus, consistency, recovery, etc. | Yes |
-| `chronicle` | `array of maps` | List of milestone summaries generated during AI assessments | No |
-| `skillTrees` | `array of maps` | Detailed path variables, levels, and prerequisites for tech, fitness, and personal growth paths | No |
-| `achievements` | `array of maps` | List of physical and intellectual trophies unlocked during the covenant | No |
-| `earnedTitles` | `array of strings`| Archive of all titles unlocked by the pilgrim | Yes |
-
-#### Direct Application Usage:
-* **Creation**: Instantiated in `IcarusAuthPortal.tsx` upon successful signup, initializing all attributes (like Strength, Discipline, Recovery) to a base score of 10.
-* **Retrieval**: Loaded on successful login to reconstruct the RPG Gothic Character Profile sheet.
-* **Syncing**: Real-time state updates (e.g., leveling up, unlocking skill tree nodes, or earning experience points) synchronize to Firestore via debounced state listeners inside `App.tsx`.
-
----
-
-### 2. `quests` Subcollection
-* **Path**: `/users/{userId}/quests/{questId}`
-* **Description**: Individual covenants, daily tasks, habits, and penances that the user schedules to complete.
-* **Primary Key (`questId`)**: Unique alphanumeric identifier prefixed by quest category or generated via timestamps.
-
-#### Schema Fields:
-| Property Name | Type / Enum | Description | Required |
-| :--- | :--- | :--- | :--- |
-| `id` | `string` | Alphanumeric document identifier | Yes |
-| `title` | `string` | Short description of the covenant or task | Yes |
-| `description` | `string` | Context or specific instructions for the quest | No |
-| `difficulty` | `"Lesser Burden"` \| `"Sinuous Vow"` \| `"Mortal Penance"` | RPG scale of effort (determines XP payouts) | Yes |
-| `category` | `"Vow"` \| `"Trial"` \| `"Crusade"` \| `"General"` \| `"Habit"` | Classification type of the task | Yes |
-| `completed` | `boolean` | Signifies if the duty has been completed | Yes |
-| `createdAt` | `string` (date-time) | ISO Timestamp of inclusion | Yes |
-| `dueDate` | `string` (date) | Execution deadline represented in `YYYY-MM-DD` | No |
-
-#### Direct Application Usage:
-* **Creation**: Instantiated when adding daily covenants via the quest builder or when campaigns auto-inject relevant milestone quests.
-* **Retrieval**: Queried upon user load and updated instantly when checking or deleting.
-* **Deletion**: Cleared either individually or bulk-purged during "Absolve Completed" operations.
-
----
-
-### 3. `goals` Subcollection
-* **Path**: `/users/{userId}/goals/{goalId}`
-* **Description**: Staged long-term campaigns generated by AI mentors or crafted by the user, providing cohesive mileposts.
-* **Primary Key (`goalId`)**: Alphanumeric campaign ID.
-
-#### Schema Fields:
-| Property Name | Type / Enum | Description | Required |
-| :--- | :--- | :--- | :--- |
-| `id` | `string` | Alphanumeric campaign ID | Yes |
-| `title` | `string` | Main objective name | Yes |
-| `aspiration` | `string` | Core driving motive behind the objective | No |
-| `categoryName` | `string` | High level category (e.g., "Software Mastery", "Iron Body") | No |
-| `timelineExplanation` | `string` | Chronological explanation or instructions | No |
-| `resources` | `array of maps` | Suggested scrolls, documentation, or links generated by AI | No |
-| `stages` | `array of maps` | Custom checkpoints, containing specific lists of tasks | No |
-| `status` | `"In Quest"` \| `"Triumphant"` \| `"Abandoned"` | State tracking for the campaign objective | Yes |
-| `createdAt` | `string` (date-time) | ISO Timestamp of campaign creation | Yes |
-| `linkedQuestsAdded` | `boolean` | Flag tracking if stage-level daily quests have been auto-injected | No |
-
-#### Direct Application Usage:
-* **Creation**: Prompted by server-side Gemini API calls, structured into stages with clear milestones, and saved upon boarding.
-* **Syncing**: Tracks status changes (e.g. marking a campaign as *Triumphant* or *Abandoned*) which dynamically logs record state changes directly to the subcollection.
-
----
-
-## 🔒 Security & Access Safeguards
-
-Every collection is rigorously protected under production-ready Zero-Trust firestore rules (`firestore.rules`):
-1. **Default-Deny Policy**: All paths default to `allow read, write: if false;` unless explicitly matching.
-2. **Access Isolation**: Rules strictly enforce that a user can **only query, write, or delete** documents where `userId == request.auth.uid`. No user can inspect another user’s records.
-3. **Data Protection Filters**: Restricts clients from executing arbitrary writes or submitting oversized/poisoned values through custom schema type validation gates.
+The root `dbSchema.sql` file mirrors the same schema for review or manual SQL editor usage.

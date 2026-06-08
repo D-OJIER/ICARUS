@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -199,7 +194,7 @@ export function CampaignsTab({
     setPlanError('');
 
     try {
-      const res = await fetch('/api/gemini/plan-goal', {
+      const res = await fetch('/api/ai/plan-goal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ aspiration })
