@@ -1,233 +1,395 @@
-import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, Animated, Easing, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import Svg, { Path, Rect, Circle, Defs, LinearGradient, Stop, G, Polygon, Line } from 'react-native-svg';
 import { soundEngine } from '../utils/audio';
+import { COLORS, FONTS, THEME_STYLES } from '../theme';
 
 interface BonfireProps {
   completedCount: number;
   activeCount: number;
   isResting: boolean;
   onRest: () => void;
-  igniteTrigger: number; // counter to trigger flash burst
+  igniteTrigger: number;
 }
 
-export const Bonfire: React.FC<BonfireProps> = ({ completedCount, activeCount, isResting, onRest, igniteTrigger }) => {
+export const Bonfire: React.FC<BonfireProps> = ({ 
+  completedCount, 
+  activeCount, 
+  isResting, 
+  onRest, 
+  igniteTrigger 
+}) => {
   const [hovered, setHovered] = useState(false);
 
-  // Bonfire size scaling depends on outstanding/completed duties in perfect sync.
-  // Full completion or high efforts yield a magnificent roaring golden fire of cinder.
   const total = completedCount + activeCount;
   const completionRatio = total > 0 ? (completedCount / total) : 0.5;
-  const fireScale = isResting ? 1.4 : 0.85 + (completionRatio * 0.45);
+  const fireScaleFactor = isResting ? 1.4 : 0.85 + (completionRatio * 0.45);
 
   const handleInteract = () => {
     soundEngine.playClick();
     onRest();
   };
 
+  // Animations
+  const fireScaleAnim = useRef(new Animated.Value(fireScaleFactor)).current;
+  const glowOpacityAnim = useRef(new Animated.Value(0.25)).current;
+  const flashAnim = useRef(new Animated.Value(0)).current;
+
+  // Track fire scale changes
+  useEffect(() => {
+    Animated.timing(fireScaleAnim, {
+      toValue: fireScaleFactor,
+      duration: 800,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [fireScaleFactor]);
+
+  // Glow pulse animation
+  useEffect(() => {
+    const pulseGlow = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowOpacityAnim, {
+          toValue: isResting ? 0.55 : 0.25 * (0.5 + completionRatio * 0.5) + 0.1,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowOpacityAnim, {
+          toValue: isResting ? 0.35 : 0.15 * (0.5 + completionRatio * 0.5),
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulseGlow.start();
+    return () => pulseGlow.stop();
+  }, [isResting, completionRatio]);
+
+  // Ignite flash trigger
+  useEffect(() => {
+    if (igniteTrigger > 0) {
+      flashAnim.setValue(0);
+      Animated.sequence([
+        Animated.timing(flashAnim, {
+          toValue: 0.4,
+          duration: 150,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(flashAnim, {
+          toValue: 0,
+          duration: 350,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        })
+      ]).start();
+    }
+  }, [igniteTrigger]);
+
+  // Render floating ash/ember particles
+  const particleCount = isResting ? 20 : 8;
+  const particles = Array.from({ length: particleCount });
+
+  // Custom particle component for easy individual animations
+  const EmberParticle = ({ index }: { index: number }) => {
+    const floatAnim = useRef(new Animated.Value(0)).current;
+    const leftOffset = 30 + Math.random() * 40; // centered left percentage
+    const size = Math.random() * 4 + 1.5;
+    
+    useEffect(() => {
+      const delay = Math.random() * 3000;
+      const duration = 3000 + Math.random() * 4000;
+      
+      const floatLoop = Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(floatAnim, {
+            toValue: 1,
+            duration: duration,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          })
+        ])
+      );
+      floatLoop.start();
+      return () => floatLoop.stop();
+    }, []);
+
+    const opacity = floatAnim.interpolate({
+      inputRange: [0, 0.2, 0.8, 1],
+      outputRange: [0, 0.8, 0.4, 0],
+    });
+
+    const translateY = floatAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [180, -40], // rises up
+    });
+
+    const translateX = floatAnim.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0, 15 + Math.random() * 15, 30], // drifts sideways
+    });
+
+    return (
+      <Animated.View
+        style={[
+          styles.ember,
+          {
+            left: `${leftOffset}%`,
+            width: size,
+            height: size,
+            opacity: opacity,
+            transform: [{ translateY }, { translateX }]
+          }
+        ]}
+      />
+    );
+  };
+
   return (
-    <div 
-      className="relative flex flex-col items-center justify-center w-full min-h-[300px] py-6 select-none bg-gradient-to-t from-gothic-back/40 to-transparent rounded-3xl border border-gothic-border/20"
-      id="bonfire-section"
-    >
-      {/* Ambient Radial Fire Glow */}
-      <div 
-        className="absolute w-64 h-64 rounded-full blur-3xl pointer-events-none transition-all duration-1000 ease-in-out"
-        style={{
-          background: isResting 
-            ? 'radial-gradient(circle, rgba(200,158,92,0.3) 0%, rgba(164,44,56,0.15) 50%, transparent 100%)' 
-            : `radial-gradient(circle, rgba(164,44,56,${0.25 * (0.5 + completionRatio * 0.5)}) 0%, rgba(19,23,34,0) 70%)`,
-          transform: `scale(${fireScale})`,
-          top: '15%'
-        }}
+    <View style={styles.container}>
+      
+      {/* Radial ambient glow layer */}
+      <Animated.View 
+        style={[
+          styles.ambientGlow,
+          { 
+            backgroundColor: isResting ? COLORS.gothicGold : COLORS.gothicCrimson,
+            opacity: glowOpacityAnim,
+            transform: [{ scale: fireScaleAnim }]
+          }
+        ]}
       />
 
-      {/* Floating Ash/Embers Particles */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {Array.from({ length: isResting ? 25 : 10 }).map((_, i) => (
-          <div
-            key={i}
-            className="absolute rounded-full bg-gothic-gold animate-ash-rise"
-            style={{
-              width: `${Math.random() * 4 + 1.5}px`,
-              height: `${Math.random() * 4 + 1.5}px`,
-              left: `${35 + Math.random() * 30}%`,
-              bottom: '25%',
-              animationDuration: `${3 + Math.random() * 4}s`,
-              animationDelay: `${Math.random() * 4}s`,
-              opacity: Math.random() * 0.7 + 0.3,
-              filter: 'blur(0.5px)'
-            }}
-          />
+      {/* Floating Ash Particles */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {particles.map((_, i) => (
+          <EmberParticle key={i} index={i} />
         ))}
-      </div>
+      </View>
 
-      {/* SVG Custom Rendered Coiled Coils, Sword of Penance, and Fire */}
-      <div className="relative w-72 h-64 flex items-center justify-center">
-        {/* The Coiled Sword of Cinder & Penance Altar */}
-        <svg 
-          viewBox="0 0 200 200" 
-          className="w-full h-full drop-shadow-2xl"
-          style={{ transition: 'transform 0.4s' }}
-        >
-          {/* Custom SVG Filters for Liquid/Fire Effect */}
-          <defs>
-            <filter id="creepy-water">
-              <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" result="noise" />
-              <feDisplacementMap in="SourceGraphic" in2="noise" scale="7" xChannelSelector="R" yChannelSelector="G" />
-            </filter>
-            
-            {/* Glowing Sword Gradients */}
-            <linearGradient id="swordGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#2e323e" />
-              <stop offset="50%" stopColor="#c89e5c" />
-              <stop offset="100%" stopColor="#dc2626" />
-            </linearGradient>
-
-            <linearGradient id="fireGrad" x1="0%" y1="100%" x2="0%" y2="0%">
-              <stop offset="0%" stopColor="#dc2626" stopOpacity="0.9" />
-              <stop offset="40%" stopColor="#ea580c" stopOpacity="0.8" />
-              <stop offset="75%" stopColor="#f59e0b" stopOpacity="0.75" />
-              <stop offset="100%" stopColor="#fef08a" stopOpacity="0.1" />
-            </linearGradient>
-            
-            <filter id="glow">
-              <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
-              <feMerge>
-                <feMergeNode in="coloredBlur"/>
-                <feMergeNode in="SourceGraphic"/>
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* Ash Mound (Dark Souls) */}
-          <path 
+      {/* Vector Bonfire SVG */}
+      <View style={styles.svgContainer}>
+        <Svg viewBox="0 0 200 200" width="100%" height={220}>
+          
+          {/* Ash Mound */}
+          <Path 
             d="M 50 170 Q 100 150 150 170 Q 170 175 180 180 Q 20 180 50 170 Z" 
             fill="#181a20" 
-            stroke="#2e323e" 
+            stroke={COLORS.gothicBorder} 
             strokeWidth="2" 
           />
-          <path 
+          <Path 
             d="M 65 174 Q 100 162 135 174" 
             fill="none" 
-            stroke="#c89e5c" 
+            stroke={COLORS.gothicGold} 
             strokeWidth="1.5" 
             opacity="0.3" 
           />
 
-          {/* Hollow Knight Stone Bench (Beneath / behind the bonfire structure) */}
-          <g transform="translate(0, 10)">
-            {/* Bench arch pillar supports */}
-            <rect x="55" y="170" width="10" height="15" rx="2" fill="#111216" stroke="#2e323e" strokeWidth="1.5" />
-            <rect x="135" y="170" width="10" height="15" rx="2" fill="#111216" stroke="#2e323e" strokeWidth="1.5" />
-            {/* Bench Slab */}
-            <rect x="40" y="165" width="120" height="7" rx="2.5" fill="#181a20" stroke="#2e323e" strokeWidth="1.8" />
-            {/* Small ornate bugs curves on bench backrest */}
-            <path d="M 65 165 C 65 155, 75 150, 85 155 C 95 150, 105 150, 115 155 C 125 150, 135 155, 135 165" fill="none" stroke="#2e323e" strokeWidth="1.5" />
-          </g>
+          {/* Hollow Knight Bench */}
+          <G transform="translate(0, 10)">
+            <Rect x="55" y="170" width="10" height="15" rx="2" fill="#111216" stroke={COLORS.gothicBorder} strokeWidth="1.5" />
+            <Rect x="135" y="170" width="10" height="15" rx="2" fill="#111216" stroke={COLORS.gothicBorder} strokeWidth="1.5" />
+            <Rect x="40" y="165" width="120" height="7" rx="2.5" fill="#181a20" stroke={COLORS.gothicBorder} strokeWidth="1.8" />
+            <Path d="M 65 165 C 65 155, 75 150, 85 155 C 95 150, 105 150, 115 155 C 125 150, 135 155, 135 165" fill="none" stroke={COLORS.gothicBorder} strokeWidth="1.5" />
+          </G>
+        </Svg>
 
-          {/* Animated Fire Flames Vector */}
-          <g 
-            className="animate-bonfire-fire origin-[100px_160px]"
-            style={{ 
-              transform: `scale(${fireScale})`,
-              transformOrigin: '100px 160px'
-            }}
-          >
+        {/* Animated Fire Flames Overlay */}
+        <Animated.View style={[styles.flameOverlay, { transform: [{ scale: fireScaleAnim }] }]}>
+          <Svg viewBox="0 0 200 200" width="100%" height={220}>
+            <Defs>
+              <LinearGradient id="fireGrad" x1="0" y1="1" x2="0" y2="0">
+                <Stop offset="0" stopColor="#dc2626" stopOpacity="0.9" />
+                <Stop offset="0.4" stopColor="#ea580c" stopOpacity="0.8" />
+                <Stop offset="0.75" stopColor="#f59e0b" stopOpacity="0.75" />
+                <Stop offset="1" stopColor="#fef08a" stopOpacity="0.1" />
+              </LinearGradient>
+            </Defs>
+            
             {/* Outer flame */}
-            <path 
+            <Path 
               d="M 100 45 C 120 75, 135 110, 130 160 C 130 160, 100 175, 70 160 C 65 110, 80 75, 100 45 Z" 
               fill="url(#fireGrad)" 
             />
             {/* Inner core flame */}
-            <path 
+            <Path 
               d="M 100 70 C 112 90, 120 115, 118 160 C 118 160, 100 170, 82 160 C 80 115, 88 90, 100 70 Z" 
               fill="#fbbf24" 
               opacity="0.8" 
-              filter="blur(1px)"
             />
             {/* White hot spirit core */}
-            <path 
+            <Path 
               d="M 100 95 C 107 108, 112 125, 110 160 C 110 160, 100 166, 90 160 C 88 125, 93 108, 100 95 Z" 
               fill="#ffffff" 
               opacity="0.9" 
-              filter="blur(1.5px)"
             />
-          </g>
+          </Svg>
+        </Animated.View>
 
-          {/* Coiled Sword of Cinder piercing the bonfire (Dark Souls) */}
-          <g transform="translate(0, -5)">
-            {/* Blade with organic twisted coil path shape */}
-            <path 
-              d="M 97 50 L 103 50 L 102 80 Q 94 95 104 110 T 96 140 L 98 170 L 102 170 L 104 140 Q 106 125 96 110 T 104 80 Z" 
-              fill="url(#swordGrad)" 
-              stroke="#0a0b0d" 
-              strokeWidth="0.8" 
-              filter="url(#glow)"
-            />
-
-            {/* Thorn crown (Blasphemous) coiled around sword crossguard */}
-            <path 
-              d="M 85 92 Q 100 85 115 92 Q 105 100 85 92" 
-              fill="none" 
-              stroke="#a42c38" 
-              strokeWidth="2.5" 
-            />
-            {/* Individual thorns */}
-            <polygon points="90,88 92,83 94,88" fill="#a42c38" />
-            <polygon points="108,86 111,81 112,86" fill="#a42c38" />
-            <polygon points="100,94 99,99 97,94" fill="#a42c38" />
-
-            {/* Sword Swell Guard */}
-            <rect x="80" y="80" width="40" height="3" rx="1.5" fill="#181a20" stroke="#c89e5c" strokeWidth="1" />
-            {/* Skull/Mask Ornament Hilt */}
-            <circle cx="100" cy="74" r="5.5" fill="#181a20" stroke="#c89e5c" strokeWidth="1.2" />
-            <circle cx="98" cy="74" r="1.2" fill="#000" />
-            <circle cx="102" cy="74" r="1.2" fill="#000" />
-            {/* Long needle-like grip (Hollow Knight Nail handle shape) */}
-            <line x1="100" y1="68.5" x2="100" y2="52" stroke="#2e323e" strokeWidth="3" />
-            <line x1="100" y1="68" x2="100" y2="52" stroke="#c89e5c" strokeWidth="1" />
+        {/* Coiled Sword Layer */}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Svg viewBox="0 0 200 200" width="100%" height={220}>
+            <Defs>
+              <LinearGradient id="swordGrad" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor="#2e323e" />
+                <Stop offset="0.5" stopColor="#c89e5c" />
+                <Stop offset="1" stopColor="#dc2626" />
+              </LinearGradient>
+            </Defs>
             
-            {/* Pommel tip */}
-            <circle cx="100" cy="51" r="2.5" fill="#c89e5c" />
-          </g>
+            <G transform="translate(0, -5)">
+              {/* Blade */}
+              <Path 
+                d="M 97 50 L 103 50 L 102 80 Q 94 95 104 110 T 96 140 L 98 170 L 102 170 L 104 140 Q 106 125 96 110 T 104 80 Z" 
+                fill="url(#swordGrad)" 
+                stroke="#0a0b0d" 
+                strokeWidth="0.8" 
+              />
 
-          {/* Overlay glow on bonfire rest */}
-          {isResting && (
-            <circle cx="100" cy="135" r="30" fill="none" stroke="#c89e5c" strokeWidth="2" strokeDasharray="3, 3" className="animate-spin" style={{ transformOrigin: '100px 135px', animationDuration: '20s' }} />
-          )}
-        </svg>
+              {/* Thorn crown */}
+              <Path 
+                d="M 85 92 Q 100 85 115 92 Q 105 100 85 92" 
+                fill="none" 
+                stroke="#a42c38" 
+                strokeWidth="2.5" 
+              />
+              <Polygon points="90,88 92,83 94,88" fill="#a42c38" />
+              <Polygon points="108,86 111,81 112,86" fill="#a42c38" />
+              <Polygon points="100,94 99,99 97,94" fill="#a42c38" />
 
-        {/* Floating "REST AT BENCH" Prompts */}
-        <div className="absolute bottom-6 flex flex-col items-center">
-          <motion.button
-            id="rest-btn"
-            onClick={handleInteract}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className={`px-5 py-2 rounded-full cursor-pointer transition-all duration-300 font-cinzel font-semibold tracking-wider text-xs border ${
-              isResting 
-                ? 'bg-gothic-gold/20 text-gothic-gold border-gothic-gold' 
-                : 'bg-gothic-dark/80 text-gray-400 hover:text-gothic-gold border-gothic-border hover:border-gothic-gold'
-            }`}
+              {/* Sword Guard */}
+              <Rect x="80" y="80" width="40" height="3" rx="1.5" fill="#181a20" stroke={COLORS.gothicGold} strokeWidth="1" />
+              {/* Skull ornament hilt */}
+              <Circle cx="100" cy="74" r="5.5" fill="#181a20" stroke={COLORS.gothicGold} strokeWidth="1.2" />
+              <Circle cx="98" cy="74" r="1.2" fill="#000" />
+              <Circle cx="102" cy="74" r="1.2" fill="#000" />
+              {/* Hilt needle grip */}
+              <Line x1="100" y1="68.5" x2="100" y2="52" stroke="#2e323e" strokeWidth="3" />
+              <Line x1="100" y1="68" x2="100" y2="52" stroke={COLORS.gothicGold} strokeWidth="1" />
+              
+              {/* Pommel tip */}
+              <Circle cx="100" cy="51" r="2.5" fill={COLORS.gothicGold} />
+            </G>
+
+            {/* Resting spiral overlay */}
+            {isResting && (
+              <Circle cx="100" cy="130" r="30" fill="none" stroke={COLORS.gothicGold} strokeWidth="1.5" strokeDasharray={[3, 3]} />
+            )}
+          </Svg>
+        </View>
+
+        {/* Resting button panel overlay */}
+        <View style={styles.actionPanel}>
+          <TouchableOpacity
+            onPress={handleInteract}
+            activeOpacity={0.8}
+            style={[
+              styles.restBtn,
+              {
+                borderColor: isResting ? COLORS.gothicGold : COLORS.gothicBorder,
+                backgroundColor: isResting ? 'rgba(200, 158, 92, 0.15)' : 'rgba(17, 18, 22, 0.8)'
+              }
+            ]}
           >
-            {isResting ? '★ RESTING AT BENCH ★' : 'REST AT BONFIRE'}
-          </motion.button>
-          <p className="text-[10px] text-gray-600 mt-2 font-mono uppercase tracking-widest">
+            <Text style={[styles.restBtnText, { color: isResting ? COLORS.gothicGold : COLORS.gray300 }]}>
+              {isResting ? '★ RESTING AT BENCH ★' : 'REST AT BONFIRE'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.restSubText}>
             {isResting ? 'Your penances align, soul tranquil' : 'Harken and meditate upon thy deeds'}
-          </p>
-        </div>
-      </div>
+          </Text>
+        </View>
 
-      {/* Screen flash on Quest Completed "IGNITE" */}
-      <motion.div
-        key={igniteTrigger}
-        initial={{ opacity: 0 }}
-        animate={igniteTrigger > 0 ? { opacity: [0, 0.4, 0] } : { opacity: 0 }}
-        transition={{ duration: 0.5 }}
-        className="absolute inset-0 bg-gothic-gold pointer-events-none rounded-3xl mix-blend-color-dodge"
+      </View>
+
+      {/* Screen flash on Ignite */}
+      <Animated.View
+        style={[
+          styles.flashOverlay,
+          {
+            opacity: flashAnim
+          }
+        ]}
+        pointerEvents="none"
       />
-    </div>
+
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+    minHeight: 280,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(10, 11, 13, 0.4)',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.2)',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  ambientGlow: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    top: 30,
+    opacity: 0.25,
+  },
+  ember: {
+    position: 'absolute',
+    borderRadius: 99,
+    backgroundColor: COLORS.gothicGold,
+    bottom: 80,
+  },
+  svgContainer: {
+    width: 250,
+    height: 220,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flameOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    transformOrigin: '100px 160px',
+  },
+  actionPanel: {
+    position: 'absolute',
+    bottom: -15,
+    alignItems: 'center',
+    width: '100%',
+  },
+  restBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  restBtnText: {
+    fontFamily: FONTS.cinzel,
+    fontWeight: 'bold',
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  restSubText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+    marginTop: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  flashOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.gothicGold,
+  }
+});
+export default Bonfire;

@@ -1,9 +1,11 @@
 // Procedural sound effects using Web Audio API to prevent external file dependencies
+// Guarded for React Native standalone environment to avoid window reference errors.
 class AudioSynth {
-  private ctx: AudioContext | null = null;
-  private backgroundLoop: { hum: OscillatorNode; noise: AudioWorkletNode | ScriptProcessorNode; gain: GainNode } | null = null;
+  private ctx: any = null;
+  private backgroundLoop: any = null;
 
   private init() {
+    if (typeof window === 'undefined') return; // React Native environment check
     if (!this.ctx) {
       // @ts-ignore
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -16,7 +18,10 @@ class AudioSynth {
   // Heavy metal clank or stone push
   playClick() {
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx) {
+      console.log('[Sound Synth Fallback]: Play Click Clank');
+      return;
+    }
     const ctx = this.ctx;
     if (ctx.state === 'suspended') ctx.resume();
 
@@ -55,7 +60,10 @@ class AudioSynth {
   // Hollow knight nail slash / Blasphemous sword sweep
   playSlash() {
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx) {
+      console.log('[Sound Synth Fallback]: Play Sword Slash');
+      return;
+    }
     const ctx = this.ctx;
     if (ctx.state === 'suspended') ctx.resume();
 
@@ -108,7 +116,10 @@ class AudioSynth {
   // Ethereal golden soul chime (Dark Souls bonfire claim/restore or geo get)
   playSoulsClaimed() {
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx) {
+      console.log('[Sound Synth Fallback]: Play Souls Claimed Chime');
+      return;
+    }
     const ctx = this.ctx;
     if (ctx.state === 'suspended') ctx.resume();
 
@@ -139,7 +150,10 @@ class AudioSynth {
   // "YOU DIED" heavy orchestral gothic drone
   playYouDied() {
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx) {
+      console.log('[Sound Synth Fallback]: Play YOU DIED Low Drone');
+      return;
+    }
     const ctx = this.ctx;
     if (ctx.state === 'suspended') ctx.resume();
 
@@ -154,7 +168,6 @@ class AudioSynth {
 
       osc.type = idx % 2 === 0 ? 'sawtooth' : 'triangle';
       osc.frequency.setValueAtTime(freq, now);
-      // Gentle modulation
       osc.frequency.linearRampToValueAtTime(freq - 1, now + 1.5);
       osc.frequency.linearRampToValueAtTime(freq + 0.5, now + 3.0);
 
@@ -163,7 +176,7 @@ class AudioSynth {
       filter.frequency.exponentialRampToValueAtTime(70, now + 2.5);
 
       gain.gain.setValueAtTime(0.0, now);
-      gain.gain.linearRampToValueAtTime(0.12, now + 0.3); // Fade in slowly like Dark Souls death screens
+      gain.gain.linearRampToValueAtTime(0.12, now + 0.3);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.5);
 
       osc.connect(filter);
@@ -179,7 +192,7 @@ class AudioSynth {
     const highGain = ctx.createGain();
     highOsc.type = 'sine';
     highOsc.frequency.setValueAtTime(880, now); // A5
-    highOsc.frequency.linearRampToValueAtTime(870, now + 2.0); // eerie pitch bend down
+    highOsc.frequency.linearRampToValueAtTime(870, now + 2.0);
 
     highGain.gain.setValueAtTime(0.0, now);
     highGain.gain.linearRampToValueAtTime(0.03, now + 0.4);
@@ -194,7 +207,10 @@ class AudioSynth {
   // Toggle ambient bonfire / bench loop
   toggleBonfireAmbient(isOn: boolean) {
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx) {
+      console.log(`[Sound Synth Fallback]: Toggle Bonfire Loop to ${isOn}`);
+      return;
+    }
     const ctx = this.ctx;
 
     if (!isOn) {
@@ -205,7 +221,6 @@ class AudioSynth {
           const loopRef = this.backgroundLoop;
           setTimeout(() => {
             loopRef.hum.stop();
-            // @ts-ignore
             if (loopRef.noise.stop) loopRef.noise.stop();
           }, 900);
         } catch (e) {}
@@ -220,12 +235,12 @@ class AudioSynth {
     const now = ctx.currentTime;
     const gainNode = ctx.createGain();
     gainNode.gain.setValueAtTime(0.0, now);
-    gainNode.gain.linearRampToValueAtTime(0.05, now + 1.0); // Slow fade-in
+    gainNode.gain.linearRampToValueAtTime(0.05, now + 1.0);
 
     // 1. Warm core hum
     const humOsc = ctx.createOscillator();
     humOsc.type = 'triangle';
-    humOsc.frequency.setValueAtTime(55, now); // Low G
+    humOsc.frequency.setValueAtTime(55, now);
     
     const humFilter = ctx.createBiquadFilter();
     humFilter.type = 'lowpass';
@@ -234,33 +249,27 @@ class AudioSynth {
     humOsc.connect(humFilter);
     humFilter.connect(gainNode);
 
-    // 2. Continuous crackle noise helper using a ScriptProcessorNode (legacy but simple & reliable offline fallback)
-    // We synthesize continuous crackling sparks
-    // @ts-ignore
+    // 2. Continuous crackle noise helper using a ScriptProcessorNode
     const createCrackleNode = () => {
       const bufferSize = 4096;
-      // @ts-ignore
       const node = ctx.createScriptProcessor ? ctx.createScriptProcessor(bufferSize, 0, 1) : null;
       if (!node) return null;
       
       let lastCrackle = 0;
-      node.onaudioprocess = (e) => {
+      node.onaudioprocess = (e: any) => {
         const output = e.outputBuffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
           let spark = 0;
-          // Random pops
           if (Math.random() < 0.0002) {
             spark = (Math.random() > 0.5 ? 1 : -1) * 0.4;
             lastCrackle = spark;
           } else {
-            // Decay pop
             lastCrackle *= 0.92;
             spark = lastCrackle;
           }
-          // White-ish noise background crackle
           const baseHum = (Math.random() * 2 - 1) * 0.004;
           output[i] = spark + baseHum;
-        };
+        }
       };
       return node;
     };
@@ -281,21 +290,23 @@ class AudioSynth {
 
     this.backgroundLoop = {
       hum: humOsc,
-      noise: noiseNode as any,
+      noise: noiseNode,
       gain: gainNode
     };
   }
 
-  // Ignite spark flame sound (when starting the RPG flow)
+  // Ignite spark flame sound
   playQuestIgnite() {
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx) {
+      console.log('[Sound Synth Fallback]: Play Quest Ignite Flame');
+      return;
+    }
     const ctx = this.ctx;
     if (ctx.state === 'suspended') ctx.resume();
 
     const now = ctx.currentTime;
     
-    // Low fire swell using a fast lowpass oscillator sweep
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
@@ -316,7 +327,6 @@ class AudioSynth {
     filter.connect(gain);
     gain.connect(ctx.destination);
 
-    // Dynamic fire crackle bursts
     const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.4, ctx.sampleRate);
     const noiseData = noiseBuffer.getChannelData(0);
     for (let i = 0; i < noiseBuffer.length; i++) {
@@ -346,13 +356,15 @@ class AudioSynth {
   // Inscribe stone ledger / Quill signature pen sound
   playQuestInscribe() {
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx) {
+      console.log('[Sound Synth Fallback]: Play Quest Inscribe');
+      return;
+    }
     const ctx = this.ctx;
     if (ctx.state === 'suspended') ctx.resume();
 
     const now = ctx.currentTime;
     
-    // Scratch 1: fast friction bandpass noise burst
     const dur = 0.15;
     const scratchBuffer = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
     const scratchData = scratchBuffer.getChannelData(0);
@@ -378,11 +390,10 @@ class AudioSynth {
     scratchNode.start(now);
     scratchNode.stop(now + dur);
 
-    // Followed immediately by a light chime ding representing inscription completed
     const osc = ctx.createOscillator();
     const bellGain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+    osc.frequency.setValueAtTime(659.25, now + 0.08);
 
     bellGain.gain.setValueAtTime(0.0, now);
     bellGain.gain.linearRampToValueAtTime(0.04, now + 0.1);
@@ -398,14 +409,16 @@ class AudioSynth {
   // Triumphant RPG level up chord
   playLevelUp() {
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx) {
+      console.log('[Sound Synth Fallback]: Play Level Up Celestial Chords');
+      return;
+    }
     const ctx = this.ctx;
     if (ctx.state === 'suspended') ctx.resume();
 
     const now = ctx.currentTime;
     
-    // Multi-voice C major/minor celestial transition or gorgeous chord structure
-    const chord = [261.63, 311.13, 392.00, 523.25, 659.25]; // C4, D#4 (Gothic Cm), G4, C5, E5 (resolution)
+    const chord = [261.63, 311.13, 392.00, 523.25, 659.25];
     
     chord.forEach((freq, idx) => {
       const stagger = idx * 0.05;
@@ -413,7 +426,6 @@ class AudioSynth {
       const gain = ctx.createGain();
       const filter = ctx.createBiquadFilter();
 
-      // Alternating vintage sound sources
       osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
       osc.frequency.setValueAtTime(freq, now + stagger);
       
@@ -435,3 +447,4 @@ class AudioSynth {
 }
 
 export const soundEngine = new AudioSynth();
+export default soundEngine;

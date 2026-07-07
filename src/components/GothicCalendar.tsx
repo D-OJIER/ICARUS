@@ -1,11 +1,19 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  ScrollView, 
+  TextInput, 
+  StyleSheet, 
+  Dimensions, 
+  Platform 
+} from 'react-native';
 import { 
   ChevronLeft, 
   ChevronRight, 
   Calendar as CalendarIcon, 
   Clock, 
-  PlusCircle, 
   Moon, 
   ShieldAlert, 
   BookOpen, 
@@ -13,17 +21,14 @@ import {
   CheckCircle2,
   HelpCircle,
   Eye,
-  ActivityIcon,
-  FlameKindling,
-  CalendarDays,
-  PenSquare,
   Award,
   Sparkles,
-  ArrowRightLeft
-} from 'lucide-react';
+  CalendarDays
+} from 'lucide-react-native';
 import { Quest } from '../types';
 import { soundEngine } from '../utils/audio';
 import { getLocalDateString } from '../utils/dateUtils';
+import { COLORS, FONTS } from '../theme';
 
 type CalendarView = 'Month' | 'Week' | 'Day';
 
@@ -33,6 +38,7 @@ interface GothicCalendarProps {
   onDeleteQuest: (id: string) => void;
   onSelectDate: (dateString: string) => void;
   onUpdateQuest?: (updatedQuest: Quest) => void;
+  onNavigateToTab?: (tabName: 'The Path' | 'The Ascent' | 'The Chronicle' | 'The Codex' | 'The Wanderer') => void;
 }
 
 export const GothicCalendar: React.FC<GothicCalendarProps> = ({
@@ -40,15 +46,14 @@ export const GothicCalendar: React.FC<GothicCalendarProps> = ({
   onToggleQuest,
   onDeleteQuest,
   onSelectDate,
-  onUpdateQuest
+  onUpdateQuest,
+  onNavigateToTab
 }) => {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [view, setView] = useState<CalendarView>('Month');
-  
-  // Modal State triggers
   const [activeModalDate, setActiveModalDate] = useState<Date | null>(null);
   
-  // Inside Modal: currently inspected specific quest ID
+  // Inspect Quest details state
   const [activeInspectedQuestId, setActiveInspectedQuestId] = useState<string | null>(null);
   const [editNotesText, setEditNotesText] = useState<string>('');
   const [editScheduleDate, setEditScheduleDate] = useState<string>('');
@@ -62,7 +67,6 @@ export const GothicCalendar: React.FC<GothicCalendarProps> = ({
     'September Moon', 'October Moon', 'November Moon', 'December Moon'
   ];
 
-  // Helper: filter quests for specific day string "YYYY-MM-DD"
   const getQuestsForDate = (date: Date): Quest[] => {
     const targetStr = getLocalDateString(date);
     return quests.filter(q => q.dueDate === targetStr);
@@ -103,11 +107,9 @@ export const GothicCalendar: React.FC<GothicCalendarProps> = ({
     setCurrentDate(new Date());
   };
 
-  // Generate Month Days
   const getDaysInMonth = () => {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDayIndex = new Date(year, month, 1).getDay();
-
     const days: { date: Date; isCurrentMonth: boolean }[] = [];
 
     // Prev month padding
@@ -141,11 +143,9 @@ export const GothicCalendar: React.FC<GothicCalendarProps> = ({
 
   const monthDays = getDaysInMonth();
 
-  // Generate Week Days centered around current date's week
   const getDaysInWeek = (): Date[] => {
     const dayOfWeek = currentDate.getDay();
     const tempDate = new Date(currentDate);
-    // Find preceding Sunday
     tempDate.setDate(currentDate.getDate() - dayOfWeek);
     
     const week: Date[] = [];
@@ -158,17 +158,13 @@ export const GothicCalendar: React.FC<GothicCalendarProps> = ({
 
   const weekDays = getDaysInWeek();
 
-  // When a day cell is clicked, open the glorious modal popup!
   const handleDaySelect = (date: Date) => {
     soundEngine.playClick();
     setActiveModalDate(date);
     onSelectDate(getLocalDateString(date));
-    
-    // Clear sub-inspected state initializers
     setActiveInspectedQuestId(null);
   };
 
-  // Internal trigger: View a specific quest details inside modal popover
   const handleToggleInspectQuest = (quest: Quest) => {
     soundEngine.playClick();
     if (activeInspectedQuestId === quest.id) {
@@ -180,7 +176,6 @@ export const GothicCalendar: React.FC<GothicCalendarProps> = ({
     }
   };
 
-  // Perform Notes/Lore update inside Modal without leaving calendar
   const handleSaveNotes = (quest: Quest) => {
     soundEngine.playClick();
     if (onUpdateQuest) {
@@ -191,7 +186,6 @@ export const GothicCalendar: React.FC<GothicCalendarProps> = ({
     }
   };
 
-  // Perform Schedule/Date update inside Modal
   const handleSaveSchedule = (quest: Quest) => {
     soundEngine.playSlash();
     if (onUpdateQuest && editScheduleDate) {
@@ -199,770 +193,1134 @@ export const GothicCalendar: React.FC<GothicCalendarProps> = ({
         ...quest,
         dueDate: editScheduleDate,
       });
-      // If the quest was rescheduled to another date, we'll keep the modal open, 
-      // but re-evaluate standard data list. Let us prompt a success sound feedback
       setTimeout(() => {
         soundEngine.playSoulsClaimed();
       }, 200);
     }
   };
 
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   return (
-    <div 
-      className="p-4 md:p-6 bg-gothic-card rounded-2xl border border-gothic-border relative overflow-hidden"
-      id="gothic-calendar-container"
-    >
-      {/* Decorative absolute lines */}
-      <div className="absolute top-0 right-10 w-24 h-px bg-gradient-to-r from-transparent via-gothic-gold/25 to-transparent" />
-      <div className="absolute bottom-0 left-10 w-24 h-px bg-gradient-to-r from-transparent via-gothic-gold/25 to-transparent" />
+    <View style={styles.container}>
+      <View style={[styles.cornerLine, { top: 0, left: 10, right: 10, height: 1, backgroundColor: 'rgba(200, 158, 92, 0.15)' }]} />
+      <View style={[styles.cornerLine, { bottom: 0, left: 10, right: 10, height: 1, backgroundColor: 'rgba(200, 158, 92, 0.15)' }]} />
 
-      {/* Header section with Switcher */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6 pb-4 border-b border-gothic-border/30">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2.5 rounded-lg bg-gothic-back/80 border border-gothic-border text-gothic-gold">
-            <CalendarIcon className="w-5 h-5 animate-pulse" />
-          </div>
-          <div>
-            <h2 className="font-cinzel text-md md:text-lg font-bold tracking-wider text-gothic-gold uppercase flex items-center gap-2">
-              Liturgy Calendar of Hours
-            </h2>
-            <p className="font-mono text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">
-              Reflect upon thy scheduled, completed and missed covenants in sacred views
-            </p>
-          </div>
-        </div>
+      {/* Header controls */}
+      <View style={styles.header}>
+        <View style={styles.headerTitleRow}>
+          <View style={styles.iconBg}>
+            <CalendarIcon size={18} color={COLORS.gothicGold} />
+          </View>
+          <View>
+            <Text style={styles.headerTitleText}>Liturgy Calendar of Hours</Text>
+            <Text style={styles.headerSubtitleText}>Reflect upon thy scheduled covenants in sacred views</Text>
+          </View>
+        </View>
 
-        {/* View Switcher Controls */}
-        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto justify-between xl:justify-end">
-          
-          <div className="flex items-center bg-gothic-back/80 border border-gothic-border rounded-lg p-0.5 overflow-hidden">
-            <button
-              onClick={handleToday}
-              className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-gray-400 hover:text-gothic-gold transition-colors hover:bg-gothic-card rounded cursor-pointer"
-            >
-              Today
-            </button>
-            <div className="w-px h-4 bg-gothic-border/40 mx-1" />
-            <button
-              onClick={handlePrev}
-              className="p-1 px-2 text-gray-400 hover:text-gothic-gold transition-colors hover:bg-gothic-card rounded cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleNext}
-              className="p-1 px-2 text-gray-400 hover:text-gothic-gold transition-colors hover:bg-gothic-card rounded cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+        <View style={styles.controlsRow}>
+          <View style={styles.navGroup}>
+            <TouchableOpacity onPress={handleToday} style={styles.navBtn}>
+              <Text style={styles.navBtnText}>TODAY</Text>
+            </TouchableOpacity>
+            <View style={styles.navDivider} />
+            <TouchableOpacity onPress={handlePrev} style={styles.navIconBtn}>
+              <ChevronLeft size={14} color={COLORS.gray400} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleNext} style={styles.navIconBtn}>
+              <ChevronRight size={14} color={COLORS.gray400} />
+            </TouchableOpacity>
+          </View>
 
-          <span className="font-cinzel text-xs md:text-sm font-semibold tracking-widest text-gothic-gold min-w-[130px] text-center uppercase">
-            {monthNames[month]} {year}
-          </span>
+          <Text style={styles.moonTitle}>
+            {monthNames[month].toUpperCase()} {year}
+          </Text>
 
-          {/* Quick Switcher Switch Container */}
-          <div className="flex items-center bg-gothic-back/90 border border-gothic-border p-1 rounded-xl shadow-inner shadow-black/80 w-full sm:w-auto justify-around">
+          <View style={styles.viewSelector}>
             {(['Month', 'Week', 'Day'] as CalendarView[]).map(v => {
               const active = view === v;
               return (
-                <button
+                <TouchableOpacity
                   key={v}
-                  onClick={() => {
-                    soundEngine.playClick();
-                    setView(v);
-                  }}
-                  className={`relative px-4 py-1.5 text-[9px] font-mono uppercase tracking-widest transition-all duration-300 rounded-lg font-bold min-w-[76px] text-center cursor-pointer ${
-                    active 
-                      ? 'bg-gothic-gold/15 text-gothic-gold border border-gothic-gold/20 shadow-[0_0_8px_rgba(200,158,92,0.15)]' 
-                      : 'text-gray-500 hover:text-gray-300 hover:bg-gothic-card/20'
-                  }`}
-                  id={`calendar-view-btn-${v.toLowerCase()}`}
+                  onPress={() => { soundEngine.playClick(); setView(v); }}
+                  style={[styles.viewSelectorBtn, active && styles.viewSelectorBtnActive]}
                 >
-                  {v}
-                </button>
+                  <Text style={[styles.viewSelectorText, active && { color: COLORS.gothicGold, fontWeight: 'bold' }]}>
+                    {v.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
               );
             })}
-          </div>
-        </div>
-      </div>
+          </View>
+        </View>
+      </View>
 
-      {/* ==================== MONTH VIEW ==================== */}
+      {/* MONTH VIEW */}
       {view === 'Month' && (
-        <div className="grid grid-cols-7 gap-1 md:gap-1.5" id="calendar-month-grid">
-          {/* Weekday Labels Header */}
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-            <div 
-              key={d} 
-              className="text-center py-2 border-b border-gothic-border/20 text-[9px] font-mono tracking-widest uppercase text-gray-400"
-            >
-              {d}
-            </div>
-          ))}
+        <View style={styles.monthGrid}>
+          {/* Weekday headers */}
+          <View style={styles.weekdaysRow}>
+            {weekdays.map(d => (
+              <Text key={d} style={styles.weekdayLabel}>{d.toUpperCase()}</Text>
+            ))}
+          </View>
 
-          {/* Cells rendering loop */}
-          {monthDays.map(({ date, isCurrentMonth }, idx) => {
-            const dateQuests = getQuestsForDate(date);
-            const isToday = new Date().toDateString() === date.toDateString();
-            const formattedStrValue = getLocalDateString(date);
-
-            return (
-              <div
-                key={idx}
-                onClick={() => handleDaySelect(date)}
-                className={`min-h-[70px] sm:min-h-[86px] md:min-h-[105px] p-2 rounded-lg border transition-all relative flex flex-col justify-between cursor-pointer overflow-hidden group ${
-                  isCurrentMonth 
-                    ? 'bg-gothic-back/30 border-gothic-border/25 hover:border-gothic-gold/50' 
-                    : 'bg-transparent border-gothic-border/5 text-gray-700 hover:border-gothic-border/15'
-                } ${
-                  isToday ? 'border-gothic-gold/40 shadow-[0_0_12px_rgba(200,158,92,0.1)]' : ''
-                }`}
-                id={`calendar-cell-${formattedStrValue}`}
-              >
-                {/* Cell title banner */}
-                <div className="flex items-center justify-between">
-                  <span 
-                    className={`font-mono text-[9px] sm:text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold transition-all ${
-                      isToday 
-                        ? 'bg-gothic-gold text-black shadow-lg font-black scale-105' 
-                        : isCurrentMonth ? 'text-gray-400 hover:text-gray-200' : 'text-gray-700'
-                    }`}
-                  >
-                    {date.getDate()}
-                  </span>
-
-                  {dateQuests.length > 0 && (
-                    <span className="text-[8px] font-mono text-gray-500 opacity-80 tracking-tighter">
-                      ⚔ {dateQuests.filter(q => q.completed).length}/{dateQuests.length}
-                    </span>
-                  )}
-                </div>
-
-                {/* Day quests lists indicators */}
-                <div className="hidden md:block flex-grow space-y-1 mt-1.5 select-none overflow-hidden text-left">
-                  {dateQuests.slice(0, 2).map(q => (
-                    <div
-                      key={q.id}
-                      className={`text-[8.5px] px-1.5 py-0.5 rounded flex items-center gap-1 transition-all truncate border font-sans ${
-                        q.completed
-                          ? 'bg-gothic-gold/5 border-gothic-gold/10 text-gothic-gold/40 line-through'
-                          : q.difficulty === 'Mortal Penance'
-                          ? 'bg-gothic-crimson/10 border-gothic-crimson/20 text-gothic-crimson'
-                          : q.difficulty === 'Sinuous Vow'
-                          ? 'bg-gothic-gold/10 border-gothic-gold/20 text-gothic-gold'
-                          : 'bg-gothic-sky/10 border-gothic-sky/20 text-gothic-sky'
-                      }`}
-                    >
-                      <span className="flex-shrink-0 text-[8px]">
-                        {q.completed ? '✓' : '†'}
-                      </span>
-                      <span className="truncate tracking-wide font-cinzel">{q.title}</span>
-                    </div>
-                  ))}
-
-                  {dateQuests.length > 2 && (
-                    <div className="w-full text-center text-[7px] font-mono tracking-widest uppercase text-gothic-gold/60 py-0.5 bg-gothic-gold/[0.02] rounded">
-                      + {dateQuests.length - 2} more
-                    </div>
-                  )}
-                </div>
-
-                {/* Mobile indicators dots */}
-                <div className="flex md:hidden gap-0.5 mt-1 justify-center flex-wrap max-w-full">
-                  {dateQuests.slice(0, 4).map(q => (
-                    <span 
-                      key={q.id}
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        q.completed 
-                          ? 'bg-gothic-gold/50 shadow-[0_0_2pxs_rgba(200,158,92,0.4)]' 
-                          : q.difficulty === 'Mortal Penance'
-                          ? 'bg-gothic-crimson'
-                          : q.difficulty === 'Sinuous Vow'
-                          ? 'bg-gothic-gold'
-                          : 'bg-gothic-sky'
-                      }`}
-                      title={q.title}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ==================== WEEK VIEW ==================== */}
-      {view === 'Week' && (
-        <div className="w-full overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gothic-border/60" id="calendar-week-grid">
-          <div className="grid grid-cols-7 gap-3 min-w-[700px] md:min-w-0">
-            {weekDays.map((date, idx) => {
+          {/* Month grids wrapping */}
+          <View style={styles.monthCellsContainer}>
+            {monthDays.map(({ date, isCurrentMonth }, idx) => {
               const dateQuests = getQuestsForDate(date);
               const isToday = new Date().toDateString() === date.toDateString();
               
               return (
-                <div
+                <TouchableOpacity
                   key={idx}
-                  onClick={() => handleDaySelect(date)}
-                  className={`p-3.5 rounded-xl border flex flex-col min-h-[220px] transition-all cursor-pointer relative text-left ${
-                    isToday 
-                      ? 'bg-gothic-gold/[0.04] border-gothic-gold/40 shadow-lg shadow-black/80' 
-                      : 'bg-gothic-back/40 border-gothic-border/20 hover:border-gothic-border/55'
-                  }`}
+                  onPress={() => handleDaySelect(date)}
+                  style={[
+                    styles.monthCell,
+                    isCurrentMonth ? styles.monthCellCurrent : styles.monthCellOutside,
+                    isToday && styles.monthCellToday
+                  ]}
                 >
-                  <div className="flex flex-col items-center mb-4 pb-2 border-b border-gothic-border/20 text-center select-none">
-                    <span className="text-[9px] font-mono tracking-widest text-gray-500 uppercase">
-                      {date.toLocaleDateString(undefined, { weekday: 'short' })}
-                    </span>
-                    <span className={`text-xs md:text-sm font-mono mt-1 font-bold rounded-full w-7 h-7 flex items-center justify-center transition-transform ${
-                      isToday ? 'bg-gothic-gold text-black shadow-lg font-black scale-105' : 'text-gray-300'
-                    }`}>
+                  <View style={styles.cellHeader}>
+                    <Text style={[
+                      styles.cellNum, 
+                      isToday ? styles.cellNumToday : (isCurrentMonth ? styles.cellNumCurrent : styles.cellNumOutside)
+                    ]}>
                       {date.getDate()}
-                    </span>
-                  </div>
-
-                  <div className="flex-grow space-y-1.5 overflow-y-auto max-h-[150px] pr-0.5 scrollbar-thin">
-                    {dateQuests.length > 0 ? (
-                      dateQuests.map(q => (
-                        <div
-                          key={q.id}
-                          className={`p-1.5 rounded border text-[9px] leading-relaxed transition-all relative flex flex-col gap-0.5 pointer-events-none ${
-                            q.completed
-                              ? 'bg-gothic-back/60 border-gothic-border/10 text-gray-600 line-through'
-                              : q.difficulty === 'Mortal Penance'
-                              ? 'bg-gothic-crimson/10 border-gothic-crimson/25 text-gothic-crimson'
-                              : q.difficulty === 'Sinuous Vow'
-                              ? 'bg-gothic-gold/10 border-gothic-gold/25 text-gothic-gold'
-                              : 'bg-gothic-sky/10 border-gothic-sky/25 text-gothic-sky'
-                          }`}
-                        >
-                          <span className="font-cinzel text-[9.5px] font-semibold tracking-wide truncate">
-                            {q.title}
-                          </span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="h-full flex items-center justify-center py-8 opacity-40 select-none">
-                        <p className="text-[8px] font-mono tracking-widest text-gray-600 uppercase text-center">
-                          Quiet Hour
-                        </p>
-                      </div>
+                    </Text>
+                    
+                    {dateQuests.length > 0 && (
+                      <Text style={styles.cellCount}>
+                        ⚔ {dateQuests.filter(q => q.completed).length}/{dateQuests.length}
+                      </Text>
                     )}
-                  </div>
+                  </View>
 
-                  <div className="mt-2 text-[7px] font-mono tracking-widest text-center text-gray-600 uppercase select-none">
-                    Select Day
-                  </div>
-                </div>
+                  {/* Cell dots for mobile display */}
+                  <View style={styles.cellDotsRow}>
+                    {dateQuests.slice(0, 3).map(q => (
+                      <View 
+                        key={q.id}
+                        style={[
+                          styles.cellDot,
+                          q.completed 
+                            ? { backgroundColor: COLORS.gothicGold } 
+                            : q.difficulty === 'Mortal Penance'
+                            ? { backgroundColor: COLORS.gothicCrimson }
+                            : q.difficulty === 'Sinuous Vow'
+                            ? { backgroundColor: COLORS.gothicGold }
+                            : { backgroundColor: COLORS.gothicSky }
+                        ]}
+                      />
+                    ))}
+                  </View>
+                </TouchableOpacity>
               );
             })}
-          </div>
-        </div>
+          </View>
+        </View>
       )}
 
-      {/* ==================== DAY VIEW (Hour dial rendering) ==================== */}
-      {view === 'Day' && (
-        <div className="space-y-4 text-left" id="calendar-day-grid">
-          <div className="flex justify-between items-center bg-gothic-back/30 p-4 border border-gothic-border/40 rounded-xl">
-            <div className="flex items-center gap-3">
-              <CalendarDays className="w-5 h-5 text-gothic-gold" />
-              <div>
-                <h4 className="font-cinzel text-sm font-bold tracking-wider text-gothic-gold uppercase">
-                  Daily Hours: {currentDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-                </h4>
-                <p className="font-mono text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">
-                  Daily covenant agenda chronometer for {getLocalDateString(currentDate)}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => handleDaySelect(currentDate)}
-              className="px-4 py-1.5 bg-gothic-gold/15 hover:bg-gothic-gold hover:text-black border border-gothic-gold/30 text-[9px] font-mono uppercase tracking-widest rounded cursor-pointer transition-colors"
-            >
-              Open Daily Liturgy Ledger
-            </button>
-          </div>
+      {/* WEEK VIEW */}
+      {view === 'Week' && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.weekGrid}>
+            {weekDays.map((date, idx) => {
+              const dateQuests = getQuestsForDate(date);
+              const isToday = new Date().toDateString() === date.toDateString();
 
-          <div className="border border-gothic-border/20 rounded-xl overflow-hidden divide-y divide-gothic-border/10">
-            {/* Displaying simple hourly slots representing Day layout */}
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => handleDaySelect(date)}
+                  style={[styles.weekColCard, isToday && styles.weekColToday]}
+                >
+                  <View style={styles.weekColHeader}>
+                    <Text style={styles.weekColDayName}>{date.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase()}</Text>
+                    <View style={[styles.weekColNumBg, isToday && styles.weekColNumBgToday]}>
+                      <Text style={[styles.weekColNumText, isToday && { color: '#000', fontWeight: 'bold' }]}>
+                        {date.getDate()}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <ScrollView style={styles.weekColQuestsScroll} contentContainerStyle={{ gap: 4 }}>
+                    {dateQuests.length > 0 ? (
+                      dateQuests.map(q => (
+                        <View
+                          key={q.id}
+                          style={[
+                            styles.weekQuestBadge,
+                            q.completed 
+                              ? styles.weekQuestBadgeCompleted 
+                              : q.difficulty === 'Mortal Penance'
+                              ? styles.weekQuestBadgeHard
+                              : q.difficulty === 'Sinuous Vow'
+                              ? styles.weekQuestBadgeMedium
+                              : styles.weekQuestBadgeEasy
+                          ]}
+                        >
+                          <Text style={styles.weekQuestTitle} numberOfLines={1}>
+                            {q.title}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <View style={styles.quietHourCard}>
+                        <Text style={styles.quietHourText}>Quiet Hour</Text>
+                      </View>
+                    )}
+                  </ScrollView>
+                  <Text style={styles.weekColFooter}>SELECT DAY</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+      )}
+
+      {/* DAY VIEW */}
+      {view === 'Day' && (
+        <View style={styles.dayGrid}>
+          <View style={styles.dayHeaderBar}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <CalendarDays size={16} color={COLORS.gothicGold} />
+              <View>
+                <Text style={styles.dayHeaderBarTitle}>
+                  {currentDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+                </Text>
+                <Text style={styles.dayHeaderBarSubtitle}>Daily hour chronometer cycles</Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.dayLiturgyBtn} onPress={() => handleDaySelect(currentDate)}>
+              <Text style={styles.dayLiturgyBtnText}>Open Liturgy Ledger</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.hourlyContainer}>
             {['06:00 Vigils', '09:00 Matins', '12:00 Sext', '15:00 None', '18:00 Vespers', '21:00 Compline'].map((hourString, idx) => {
-              // Distribute quests of this day to different slots for graphical depth
               const dayQuests = getQuestsForDate(currentDate);
               const indexedQuests = dayQuests.filter((_, qIdx) => qIdx % 6 === idx);
 
               return (
-                <div key={idx} className="flex flex-col sm:flex-row items-stretch min-h-[50px]">
-                  {/* hour column */}
-                  <div className="w-28 bg-gothic-back/40 p-3 flex flex-row sm:flex-col justify-between sm:justify-start items-center sm:items-end border-b sm:border-b-0 sm:border-r border-gothic-border/25">
-                    <span className="font-mono text-[10px] text-gothic-gold font-bold uppercase tracking-wider">
-                      {hourString.split(' ')[0]}
-                    </span>
-                    <span className="font-mono text-[8px] text-gray-500 uppercase tracking-widest mt-0.5">
-                      {hourString.split(' ').slice(1).join(' ')}
-                    </span>
-                  </div>
+                <View key={idx} style={styles.hourRow}>
+                  <View style={styles.hourLabelCol}>
+                    <Text style={styles.hourLabelNum}>{hourString.split(' ')[0]}</Text>
+                    <Text style={styles.hourLabelName}>{hourString.split(' ').slice(1).join(' ').toUpperCase()}</Text>
+                  </View>
 
-                  {/* tasks row */}
-                  <div className="flex-1 p-3 flex flex-wrap gap-2.5 items-center">
+                  <View style={styles.hourQuestsCol}>
                     {indexedQuests.length > 0 ? (
                       indexedQuests.map(q => (
-                        <div
+                        <TouchableOpacity
                           key={q.id}
-                          onClick={() => handleDaySelect(currentDate)}
-                          className={`px-3 py-1.5 rounded-lg border text-[10px] flex items-center gap-2 cursor-pointer transition-transform hover:scale-[1.01] ${
-                            q.completed
-                              ? 'bg-gothic-gold/5 border-gothic-gold/15 text-gothic-gold/40 line-through'
+                          onPress={() => handleDaySelect(currentDate)}
+                          style={[
+                            styles.hourQuestItem,
+                            q.completed 
+                              ? styles.hourQuestCompleted 
                               : q.difficulty === 'Mortal Penance'
-                              ? 'bg-gothic-crimson/15 border-gothic-crimson/25 text-gothic-crimson font-serif'
+                              ? styles.hourQuestHard
                               : q.difficulty === 'Sinuous Vow'
-                              ? 'bg-gothic-gold/10 border-gothic-gold/25 text-gothic-gold'
-                              : 'bg-gothic-sky/10 border-gothic-sky/25 text-gothic-sky'
-                          }`}
+                              ? styles.hourQuestMedium
+                              : styles.hourQuestEasy
+                          ]}
                         >
-                          <span>{q.completed ? '✓' : '†'}</span>
-                          <span className="font-cinzel tracking-wider font-semibold">{q.title}</span>
-                        </div>
+                          <Text style={styles.hourQuestTick}>{q.completed ? '✓' : '†'}</Text>
+                          <Text style={[styles.hourQuestTitle, q.completed && { textDecorationLine: 'line-through', color: COLORS.gray600 }]} numberOfLines={1}>
+                            {q.title}
+                          </Text>
+                        </TouchableOpacity>
                       ))
                     ) : (
-                      <span className="font-mono text-[8px] text-gray-600 uppercase tracking-widest">
-                        Perfect Stillness
-                      </span>
+                      <Text style={styles.perfectStillnessText}>Perfect Stillness</Text>
                     )}
-                  </div>
-                </div>
+                  </View>
+                </View>
               );
             })}
-          </div>
-        </div>
+          </View>
+        </View>
       )}
 
-      {/* ======================================================== */}
-      {/* ============ REQUIREMENT 3: DETAILED INTERACTIVE POPUP MODAL ============ */}
-      {/* ======================================================== */}
-      <AnimatePresence>
-        {activeModalDate && (() => {
-          const dateStr = getLocalDateString(activeModalDate);
-          const allQuestsForDate = quests.filter(q => q.dueDate === dateStr);
-          const todayStrValue = getLocalDateString(new Date());
+      {/* DETAIL MODAL POPUP */}
+      {activeModalDate && (() => {
+        const dateStr = getLocalDateString(activeModalDate);
+        const allQuestsForDate = quests.filter(q => q.dueDate === dateStr);
+        const todayStrValue = getLocalDateString(new Date());
 
-          // Subdivide lists: Completed, Pending, Missed
-          const completedList = allQuestsForDate.filter(q => q.completed);
-          
-          // Pending is incomplete, due today or in future
-          const pendingList = allQuestsForDate.filter(q => !q.completed && dateStr >= todayStrValue);
-          
-          // Missed is incomplete, due strictly in yesterday or past days
-          const missedList = allQuestsForDate.filter(q => !q.completed && dateStr < todayStrValue);
+        const completedList = allQuestsForDate.filter(q => q.completed);
+        const pendingList = allQuestsForDate.filter(q => !q.completed && dateStr >= todayStrValue);
+        const missedList = allQuestsForDate.filter(q => !q.completed && dateStr < todayStrValue);
 
-          return (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/92 backdrop-blur-md select-none overflow-y-auto"
-              onClick={() => setActiveModalDate(null)}
-              id="calendar-liturgy-modal"
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.94, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.94, y: 15 }}
-                transition={{ type: "spring", stiffness: 220, damping: 26 }}
-                className="w-full max-w-2xl bg-gothic-card border border-gothic-gold/25 shadow-[0_20px_50px_rgba(0,0,0,0.95)] rounded-2xl p-5 md:p-6 text-left relative overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Visual gothic aesthetics corners */}
-                <div className="absolute top-0 left-0 w-8 h-8 opacity-40 border-t-2 border-l-2 border-gothic-gold rounded-tl-xl" />
-                <div className="absolute top-0 right-0 w-8 h-8 opacity-40 border-t-2 border-r-2 border-gothic-gold rounded-tr-xl" />
-                <div className="absolute bottom-0 left-0 w-8 h-8 opacity-40 border-b-2 border-l-2 border-gothic-gold rounded-bl-xl" />
-                <div className="absolute bottom-0 right-0 w-8 h-8 opacity-40 border-b-2 border-r-2 border-gothic-gold rounded-br-xl" />
+        return (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <View style={[styles.modalCorner, { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 }]} />
+              <View style={[styles.modalCorner, { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 }]} />
+              <View style={[styles.modalCorner, { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 }]} />
+              <View style={[styles.modalCorner, { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 }]} />
 
-                {/* Header */}
-                <div className="flex justify-between items-start border-b border-gothic-border/30 pb-4 mb-4" id="modal-date-header">
-                  <div>
-                    <h3 className="font-cinzel text-sm sm:text-base font-bold tracking-widest text-gothic-gold uppercase flex items-center gap-2">
-                      ⚔ LITURGY LEDGER OF DEEDS
-                    </h3>
-                    <p className="font-mono text-gray-300 text-xs mt-1 uppercase font-bold tracking-wider">
-                      {activeModalDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  </div>
-                  <button 
-                    onClick={() => setActiveModalDate(null)}
-                    className="text-gray-400 hover:text-white font-mono text-xs uppercase hover:bg-gothic-back/40 px-2.5 py-1.5 rounded border border-gothic-border/30 cursor-pointer"
-                  >
-                    Esc
-                  </button>
-                </div>
+              <View style={styles.modalHeaderRow}>
+                <View>
+                  <Text style={styles.modalHeaderTitle}>⚔ LITURGY LEDGER OF DEEDS</Text>
+                  <Text style={styles.modalHeaderDate}>
+                    {activeModalDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.modalHeaderClose} onPress={() => setActiveModalDate(null)}>
+                  <Text style={styles.modalHeaderCloseText}>ESC</Text>
+                </TouchableOpacity>
+              </View>
 
-                {/* Main scroll container inside Modal */}
-                <div className="max-h-[380px] overflow-y-auto pr-1 space-y-5 scrollbar-thin">
+              <ScrollView style={{ flex: 1, marginVertical: 12 }} showsVerticalScrollIndicator={false}>
+                {/* 1. COMPLETED LIST */}
+                <View style={styles.listSection}>
+                  <Text style={styles.listSectionTitle}>In Communion Absolved ({completedList.length})</Text>
+                  {completedList.length > 0 ? (
+                    completedList.map(q => (
+                      <View key={q.id} style={styles.modalQuestItem}>
+                        <View style={styles.modalQuestRow}>
+                          <TouchableOpacity onPress={() => onToggleQuest(q.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <CheckCircle2 size={14} color={COLORS.gothicGold} />
+                            <Text style={styles.modalQuestTitleCompleted} numberOfLines={1}>{q.title}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleToggleInspectQuest(q)} style={styles.inspectIcon}>
+                            <Eye size={12} color={COLORS.gray400} />
+                          </TouchableOpacity>
+                        </View>
 
-                  {/* 1. COMPLETED COVENANTS LIST */}
-                  <div id="modal-completed-list">
-                    <div className="flex items-center gap-2 mb-2 select-none">
-                      <div className="w-1.5 h-1.5 rounded-full bg-gothic-gold" />
-                      <span className="font-cinzel text-[10px] font-bold tracking-widest uppercase text-gothic-gold-dim">
-                        In Communion Absolved ({completedList.length})
-                      </span>
-                    </div>
+                        {activeInspectedQuestId === q.id && (
+                          <View style={styles.inspectPanel}>
+                            <Text style={styles.inspectLabel}>📜 LORE & NOTES</Text>
+                            <TextInput
+                              value={editNotesText}
+                              onChangeText={setEditNotesText}
+                              multiline
+                              style={styles.inspectNotesInput}
+                            />
+                            <TouchableOpacity style={styles.saveNotesBtn} onPress={() => handleSaveNotes(q)}>
+                              <Text style={styles.saveNotesBtnText}>Save Inscription</Text>
+                            </TouchableOpacity>
 
-                    <div className="space-y-2">
-                      {completedList.length > 0 ? (
-                        completedList.map(q => (
-                          <div 
-                            key={q.id}
-                            className="bg-black/30 border border-gothic-border/10 p-2.5 rounded-lg flex flex-col gap-2 relative"
-                          >
-                            <div className="flex items-center justify-between gap-2.5">
-                              <button 
-                                onClick={() => {
-                                  soundEngine.playClick();
-                                  onToggleQuest(q.id);
-                                }}
-                                className="flex items-center gap-2.5 text-left text-gothic-gold/50 hover:text-gothic-gold select-none cursor-pointer"
-                              >
-                                <CheckCircle2 className="w-4 h-4 text-gothic-gold" />
-                                <span className="font-cinzel text-xs font-semibold tracking-wider line-through">
-                                  {q.title}
-                                </span>
-                              </button>
+                            <View style={styles.inspectRescheduleRow}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.inspectLabel}>RESCHEDULE</Text>
+                                <TextInput
+                                  value={editScheduleDate}
+                                  onChangeText={setEditScheduleDate}
+                                  style={styles.inspectDateInput}
+                                  placeholder="YYYY-MM-DD"
+                                  placeholderTextColor={COLORS.gray700}
+                                />
+                              </View>
+                              <TouchableOpacity style={styles.saveScheduleBtn} onPress={() => handleSaveSchedule(q)}>
+                                <Text style={styles.saveNotesBtnText}>SHIFT</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.quietStatusText}>No covenants absolved today.</Text>
+                  )}
+                </View>
 
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[8.5px] font-mono text-gray-500 uppercase px-1.5 border border-gothic-border/10 bg-gothic-back/50 rounded">
-                                  {q.category}
-                                </span>
-                                <button
-                                  onClick={() => handleToggleInspectQuest(q)}
-                                  className="p-1 hover:bg-gothic-back/80 rounded border border-gothic-border/20 text-gray-400 hover:text-white cursor-pointer"
-                                  title="Expand covenant parameters"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
+                {/* 2. PENDING LIST */}
+                <View style={styles.listSection}>
+                  <Text style={[styles.listSectionTitle, { color: COLORS.gothicSky }]}>Solemn Trials Pending ({pendingList.length})</Text>
+                  {pendingList.length > 0 ? (
+                    pendingList.map(q => (
+                      <View key={q.id} style={styles.modalQuestItem}>
+                        <View style={styles.modalQuestRow}>
+                          <TouchableOpacity onPress={() => onToggleQuest(q.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <View style={styles.pendingIndicatorBox} />
+                            <Text style={styles.modalQuestTitlePending} numberOfLines={1}>{q.title}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleToggleInspectQuest(q)} style={styles.inspectIcon}>
+                            <Eye size={12} color={COLORS.gray400} />
+                          </TouchableOpacity>
+                        </View>
 
-                            {/* Inspected panel */}
-                            {activeInspectedQuestId === q.id && (
-                              <div className="p-3 bg-gothic-back/50 rounded-lg border border-gothic-border/40 space-y-3 mt-1.5">
-                                <div>
-                                  <span className="block text-[8px] font-mono text-gothic-gold uppercase tracking-widest mb-1 select-none">
-                                    📜 COVENANT INSCRIBED LORE & NOTES
-                                  </span>
-                                  <textarea
-                                    className="w-full h-16 bg-[#0a0b0d] border border-gothic-border rounded-md text-xs text-gray-300 p-2 focus:outline-none focus:border-gothic-gold/60 leading-relaxed font-light"
-                                    value={editNotesText}
-                                    onChange={(e) => setEditNotesText(e.target.value)}
-                                  />
-                                  <button
-                                    onClick={() => handleSaveNotes(q)}
-                                    className="mt-1.5 px-3 py-1 bg-gothic-gold/15 hover:bg-gothic-gold hover:text-black rounded text-[9px] font-mono uppercase tracking-widest cursor-pointer transition-colors"
-                                  >
-                                    Save Note Inscription
-                                  </button>
-                                </div>
+                        {activeInspectedQuestId === q.id && (
+                          <View style={styles.inspectPanel}>
+                            <Text style={styles.inspectLabel}>📜 LORE & NOTES</Text>
+                            <TextInput
+                              value={editNotesText}
+                              onChangeText={setEditNotesText}
+                              multiline
+                              style={styles.inspectNotesInput}
+                            />
+                            <TouchableOpacity style={styles.saveNotesBtn} onPress={() => handleSaveNotes(q)}>
+                              <Text style={styles.saveNotesBtnText}>Save Inscription</Text>
+                            </TouchableOpacity>
 
-                                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gothic-border/10">
-                                  <div>
-                                    <span className="block text-[8px] font-mono text-gray-500 uppercase tracking-widest mb-0.5 select-none">
-                                      CHRONICLE SCHEDULE
-                                    </span>
-                                    <div className="flex gap-1.5">
-                                      <input 
-                                        type="date"
-                                        className="bg-[#0a0b0d] border border-gothic-border text-[10px] font-mono text-gray-300 rounded px-1.5 py-0.5"
-                                        value={editScheduleDate}
-                                        onChange={(e) => setEditScheduleDate(e.target.value)}
-                                      />
-                                      <button
-                                        onClick={() => handleSaveSchedule(q)}
-                                        className="p-1 bg-gothic-gold/10 hover:bg-gothic-gold hover:text-black rounded text-[9px] font-mono uppercase tracking-widest cursor-pointer"
-                                        title="Shift schedule date"
-                                      >
-                                        Shift
-                                      </button>
-                                    </div>
-                                  </div>
+                            <View style={styles.inspectRescheduleRow}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.inspectLabel}>RESCHEDULE</Text>
+                                <TextInput
+                                  value={editScheduleDate}
+                                  onChangeText={setEditScheduleDate}
+                                  style={styles.inspectDateInput}
+                                  placeholder="YYYY-MM-DD"
+                                  placeholderTextColor={COLORS.gray700}
+                                />
+                              </View>
+                              <TouchableOpacity style={styles.saveScheduleBtn} onPress={() => handleSaveSchedule(q)}>
+                                <Text style={styles.saveNotesBtnText}>SHIFT</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.quietStatusText}>No pending solemn requirements mapped.</Text>
+                  )}
+                </View>
 
-                                  <div>
-                                    <span className="block text-[8px] font-mono text-gray-500 uppercase tracking-widest mb-0.5 select-none">
-                                      COVENANT LIFETIME
-                                    </span>
-                                    <span className="text-[10px] uppercase font-mono text-gray-400 font-bold block mt-1">
-                                      {q.category === 'Habit' ? '🛡 40-Day Continuous Cycle' : '⚓ Single-Stage Quest'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
+                {/* 3. MISSED LIST */}
+                <View style={styles.listSection}>
+                  <Text style={[styles.listSectionTitle, { color: COLORS.gothicCrimson }]}>Corrupted / Missed Covenants ({missedList.length})</Text>
+                  {missedList.length > 0 ? (
+                    missedList.map(q => (
+                      <View key={q.id} style={styles.modalQuestItem}>
+                        <View style={styles.modalQuestRow}>
+                          <TouchableOpacity onPress={() => onToggleQuest(q.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <ShieldAlert size={14} color={COLORS.gothicCrimson} />
+                            <Text style={styles.modalQuestTitleMissed} numberOfLines={1}>{q.title}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleToggleInspectQuest(q)} style={styles.inspectIcon}>
+                            <Eye size={12} color={COLORS.gray400} />
+                          </TouchableOpacity>
+                        </View>
 
-                          </div>
-                        ))
-                      ) : (
-                        <p className="font-mono text-[9px] text-gray-600 uppercase italic py-2 pl-2 border-l border-gothic-border/15">
-                          No covenants absolved today.
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                        {activeInspectedQuestId === q.id && (
+                          <View style={styles.inspectPanel}>
+                            <Text style={styles.inspectLabel}>📜 LORE & NOTES</Text>
+                            <TextInput
+                              value={editNotesText}
+                              onChangeText={setEditNotesText}
+                              multiline
+                              style={styles.inspectNotesInput}
+                            />
+                            <TouchableOpacity style={styles.saveNotesBtn} onPress={() => handleSaveNotes(q)}>
+                              <Text style={styles.saveNotesBtnText}>Save Inscription</Text>
+                            </TouchableOpacity>
 
-                  {/* 2. PENDING COVENANTS LIST */}
-                  <div id="modal-pending-list">
-                    <div className="flex items-center gap-2 mb-2 select-none">
-                      <div className="w-1.5 h-1.5 rounded-full bg-gothic-sky" />
-                      <span className="font-cinzel text-[10px] font-bold tracking-widest uppercase text-gothic-sky/80">
-                        Solemn Trials Pending ({pendingList.length})
-                      </span>
-                    </div>
+                            <View style={styles.inspectRescheduleRow}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.inspectLabel}>RESCHEDULE</Text>
+                                <TextInput
+                                  value={editScheduleDate}
+                                  onChangeText={setEditScheduleDate}
+                                  style={styles.inspectDateInput}
+                                  placeholder="YYYY-MM-DD"
+                                  placeholderTextColor={COLORS.gray700}
+                                />
+                              </View>
+                              <TouchableOpacity style={styles.saveScheduleBtn} onPress={() => handleSaveSchedule(q)}>
+                                <Text style={styles.saveNotesBtnText}>SHIFT</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={[styles.quietStatusText, { borderLeftColor: COLORS.gothicCrimson }]}>
+                      Clean record for today. Thy soul is free of broken bounds.
+                    </Text>
+                  )}
+                </View>
+              </ScrollView>
 
-                    <div className="space-y-2">
-                      {pendingList.length > 0 ? (
-                        pendingList.map(q => (
-                          <div 
-                            key={q.id}
-                            className="bg-black/30 border border-gothic-border/15 p-2.5 rounded-lg flex flex-col gap-2 relative"
-                          >
-                            <div className="flex items-center justify-between gap-2.5">
-                              <button 
-                                onClick={() => {
-                                  soundEngine.playSlash();
-                                  onToggleQuest(q.id);
-                                }}
-                                className="flex items-center gap-2.5 text-left text-gray-400 hover:text-gothic-gold select-none cursor-pointer"
-                              >
-                                <div className="w-4 h-4 rounded border border-gothic-border flex-shrink-0 flex items-center justify-center hover:border-gothic-gold" />
-                                <span className="font-cinzel text-xs font-semibold tracking-wider text-gray-200">
-                                  {q.title}
-                                </span>
-                              </button>
+              {/* Modal Footer */}
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  onPress={() => {
+                    soundEngine.playClick();
+                    onSelectDate(dateStr);
+                    setActiveModalDate(null);
+                    if (onNavigateToTab) {
+                      onNavigateToTab('The Path');
+                    }
+                  }}
+                  style={styles.modalFooterInscribeBtn}
+                >
+                  <Text style={styles.modalFooterInscribeBtnText}>Inscribe New Vow For Date</Text>
+                </TouchableOpacity>
 
-                              <div className="flex items-center gap-1.5">
-                                <span className={`text-[8.5px] font-mono uppercase px-1.5 border rounded ${
-                                  q.difficulty === 'Mortal Penance'
-                                    ? 'text-gothic-crimson border-gothic-crimson/25 bg-gothic-crimson/5'
-                                    : 'text-gothic-gold border-gothic-gold/25 bg-gothic-gold/5'
-                                }`}>
-                                  {q.difficulty}
-                                </span>
-                                <button
-                                  onClick={() => handleToggleInspectQuest(q)}
-                                  className="p-1 hover:bg-gothic-back/80 rounded border border-gothic-border/20 text-gray-400 hover:text-white cursor-pointer"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
+                <TouchableOpacity
+                  onPress={() => { soundEngine.playClick(); setActiveModalDate(null); }}
+                  style={styles.modalFooterCloseBtn}
+                >
+                  <Text style={styles.modalFooterCloseBtnText}>Close Ledger</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        );
+      })()}
 
-                            {/* Inspected panel */}
-                            {activeInspectedQuestId === q.id && (
-                              <div className="p-3 bg-gothic-back/50 rounded-lg border border-gothic-border/40 space-y-3 mt-1.5">
-                                <div>
-                                  <span className="block text-[8px] font-mono text-gothic-gold uppercase tracking-widest mb-1 select-none">
-                                    📜 COVENANT INSCRIBED LORE & NOTES
-                                  </span>
-                                  <textarea
-                                    className="w-full h-16 bg-[#0a0b0d] border border-gothic-border rounded-md text-xs text-gray-300 p-2 focus:outline-none focus:border-gothic-gold/60 leading-relaxed font-light"
-                                    value={editNotesText}
-                                    onChange={(e) => setEditNotesText(e.target.value)}
-                                  />
-                                  <button
-                                    onClick={() => handleSaveNotes(q)}
-                                    className="mt-1.5 px-3 py-1 bg-gothic-gold/15 hover:bg-gothic-gold hover:text-black rounded text-[9px] font-mono uppercase tracking-widest cursor-pointer transition-colors"
-                                  >
-                                    Save Note Inscription
-                                  </button>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gothic-border/10">
-                                  <div>
-                                    <span className="block text-[8px] font-mono text-gray-500 uppercase tracking-widest mb-0.5 select-none">
-                                      CHRONICLE SCHEDULE
-                                    </span>
-                                    <div className="flex gap-1.5 animate-pulse">
-                                      <input 
-                                        type="date"
-                                        className="bg-[#0a0b0d] border border-gothic-border text-[10px] font-mono text-gray-300 rounded px-1.5 py-0.5 focus:outline-none"
-                                        value={editScheduleDate}
-                                        onChange={(e) => setEditScheduleDate(e.target.value)}
-                                      />
-                                      <button
-                                        onClick={() => handleSaveSchedule(q)}
-                                        className="p-1 bg-gothic-gold/10 hover:bg-gothic-gold hover:text-black rounded text-[9px] font-mono uppercase tracking-widest cursor-pointer"
-                                        title="Shift schedule date"
-                                      >
-                                        Shift
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <span className="block text-[8px] font-mono text-gray-500 uppercase tracking-widest mb-0.5 select-none">
-                                      COVENANT LIFETIME
-                                    </span>
-                                    <span className="text-[10px] uppercase font-mono text-gray-400 font-bold block mt-1">
-                                      {q.category === 'Habit' ? '🛡 40-Day Continuous Cycle' : '⚓ Single-Stage Quest'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                          </div>
-                        ))
-                      ) : (
-                        <p className="font-mono text-[9px] text-gray-600 uppercase italic py-2 pl-2 border-l border-gothic-border/15">
-                          No pending solemn requirements mapped for today.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 3. MISSED COVENANTS LIST */}
-                  <div id="modal-missed-list">
-                    <div className="flex items-center gap-2 mb-2 select-none">
-                      <div className="w-1.5 h-1.5 rounded-full bg-gothic-crimson" />
-                      <span className="font-cinzel text-[10px] font-bold tracking-widest uppercase text-gothic-crimson">
-                        Corrupted / Missed Covenants ({missedList.length})
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      {missedList.length > 0 ? (
-                        missedList.map(q => (
-                          <div 
-                            key={q.id}
-                            className="bg-black/30 border border-gothic-crimson/15 p-2.5 rounded-lg flex flex-col gap-2 relative"
-                          >
-                            <div className="flex items-center justify-between gap-2.5">
-                              <button 
-                                onClick={() => {
-                                  soundEngine.playSlash();
-                                  onToggleQuest(q.id);
-                                }}
-                                className="flex items-center gap-2.5 text-left text-gothic-crimson hover:text-gothic-gold select-none cursor-pointer"
-                              >
-                                <ShieldAlert className="w-4 h-4 text-gothic-crimson flex-shrink-0 animate-pulse" />
-                                <span className="font-cinzel text-xs font-semibold tracking-wider text-gothic-crimson">
-                                  {q.title}
-                                </span>
-                              </button>
-
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[8.5px] font-mono uppercase px-1.5 border border-gothic-crimson/20 bg-gothic-crimson/5 text-gothic-crimson rounded">
-                                  OVERDUE
-                                </span>
-                                <button
-                                  onClick={() => handleToggleInspectQuest(q)}
-                                  className="p-1 hover:bg-gothic-back/80 rounded border border-gothic-border/20 text-gray-400 hover:text-white cursor-pointer"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Inspected panel */}
-                            {activeInspectedQuestId === q.id && (
-                              <div className="p-3 bg-gothic-back/50 rounded-lg border border-gothic-border/40 space-y-3 mt-1.5">
-                                <div>
-                                  <span className="block text-[8px] font-mono text-gothic-gold uppercase tracking-widest mb-1 select-none">
-                                    📜 COVENANT INSCRIBED LORE & NOTES
-                                  </span>
-                                  <textarea
-                                    className="w-full h-16 bg-[#0a0b0d] border border-gothic-border rounded-md text-xs text-gray-300 p-2 focus:outline-none focus:border-gothic-gold/60 leading-relaxed font-light"
-                                    value={editNotesText}
-                                    onChange={(e) => setEditNotesText(e.target.value)}
-                                  />
-                                  <button
-                                    onClick={() => handleSaveNotes(q)}
-                                    className="mt-1.5 px-3 py-1 bg-gothic-gold/15 hover:bg-gothic-gold hover:text-black rounded text-[9px] font-mono uppercase tracking-widest cursor-pointer transition-colors"
-                                  >
-                                    Save Note Inscription
-                                  </button>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gothic-border/10">
-                                  <div>
-                                    <span className="block text-[8px] font-mono text-gray-500 uppercase tracking-widest mb-0.5 select-none">
-                                      CHRONICLE SCHEDULE
-                                    </span>
-                                    <div className="flex gap-1.5">
-                                      <input 
-                                        type="date"
-                                        className="bg-[#0a0b0d] border border-gothic-border text-[10px] font-mono text-gray-300 rounded px-1.5 py-0.5"
-                                        value={editScheduleDate}
-                                        onChange={(e) => setEditScheduleDate(e.target.value)}
-                                      />
-                                      <button
-                                        onClick={() => handleSaveSchedule(q)}
-                                        className="p-1 bg-gothic-gold/10 hover:bg-gothic-gold hover:text-black rounded text-[9px] font-mono uppercase tracking-widest cursor-pointer"
-                                        title="Shift schedule date"
-                                      >
-                                        Shift
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <span className="block text-[8px] font-mono text-gray-500 uppercase tracking-widest mb-0.5 select-none">
-                                      COVENANT LIFETIME
-                                    </span>
-                                    <span className="text-[10px] uppercase font-mono text-gray-400 font-bold block mt-1">
-                                      {q.category === 'Habit' ? '🛡 40-Day Continuous Cycle' : '⚓ Single-Stage Quest'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                          </div>
-                        ))
-                      ) : (
-                        <p className="font-mono text-[9px] text-gray-600 uppercase italic py-2 pl-2 border-l border-gothic-crimson/15">
-                          Clean record for today. Thy soul is free of broken bounds.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-
-                {/* Footer Controls line */}
-                <div className="flex justify-between items-center mt-5 pt-4 border-t border-gothic-border/20">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        soundEngine.playClick();
-                        // Prompt parent to initiate quest creation
-                        onSelectDate(dateStr);
-                        setActiveModalDate(null);
-                        // Force change view to 'Forge' Tab via trigger or simply notify parent
-                        const forgeTabBtn = document.getElementById('tab-btn-forge');
-                        if (forgeTabBtn) {
-                          forgeTabBtn.click();
-                        }
-                      }}
-                      className="px-3.5 py-1.5 bg-gothic-gold/10 hover:bg-gothic-gold hover:text-black hover:border-black rounded border border-gothic-gold/20 text-[9px] font-mono uppercase tracking-widest cursor-pointer text-gothic-gold transition-colors"
-                    >
-                      Inscribe New Vow For Date
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      soundEngine.playClick();
-                      setActiveModalDate(null);
-                    }}
-                    className="px-5 py-1.5 bg-gothic-gold hover:bg-amber-500 border border-gothic-gold text-black rounded text-[9px] font-mono uppercase tracking-widest transition-transform font-bold cursor-pointer"
-                  >
-                    Close Liturgical Ledger
-                  </button>
-                </div>
-
-              </motion.div>
-            </motion.div>
-          );
-        })()}
-      </AnimatePresence>
-
-    </div>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: COLORS.gothicCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    padding: 12,
+    position: 'relative',
+    marginVertical: 10,
+  },
+  cornerLine: {
+    position: 'absolute',
+  },
+  header: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.3)',
+    paddingBottom: 12,
+    marginBottom: 16,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconBg: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(10, 11, 13, 0.8)',
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+  },
+  headerTitleText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+  },
+  headerSubtitleText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+  },
+  controlsRow: {
+    flexDirection: 'column',
+    gap: 8,
+    marginTop: 12,
+  },
+  navGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.gothicDark,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    padding: 2,
+    alignSelf: 'flex-start',
+  },
+  navBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+  },
+  navBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray400,
+    fontWeight: 'bold',
+  },
+  navDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: 'rgba(46, 50, 62, 0.4)',
+    marginHorizontal: 4,
+  },
+  navIconBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  moonTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 1.5,
+    marginVertical: 4,
+  },
+  viewSelector: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.gothicDark,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    padding: 2,
+  },
+  viewSelectorBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  viewSelectorBtnActive: {
+    backgroundColor: 'rgba(200, 158, 92, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.2)',
+  },
+  viewSelectorText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+  },
+  monthGrid: {
+    width: '100%',
+  },
+  weekdaysRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.2)',
+    paddingBottom: 6,
+    marginBottom: 6,
+  },
+  weekdayLabel: {
+    flex: 1,
+    textAlign: 'center',
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray500,
+  },
+  monthCellsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  monthCell: {
+    width: '13.3%',
+    minHeight: 52,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 4,
+    justifyContent: 'space-between',
+  },
+  monthCellCurrent: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderColor: COLORS.gothicBorder,
+  },
+  monthCellOutside: {
+    backgroundColor: 'transparent',
+    borderColor: 'rgba(46, 50, 62, 0.1)',
+  },
+  monthCellToday: {
+    borderColor: COLORS.gothicGold,
+  },
+  cellHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cellNum: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    width: 14,
+    height: 14,
+    textAlign: 'center',
+    lineHeight: 14,
+    borderRadius: 7,
+  },
+  cellNumToday: {
+    backgroundColor: COLORS.gothicGold,
+    color: '#000',
+    fontWeight: 'bold',
+  },
+  cellNumCurrent: {
+    color: COLORS.gray300,
+  },
+  cellNumOutside: {
+    color: COLORS.gray700,
+  },
+  cellCount: {
+    fontFamily: FONTS.mono,
+    fontSize: 6.5,
+    color: COLORS.gray500,
+  },
+  cellDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 2,
+    marginTop: 4,
+  },
+  cellDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  weekGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  weekColCard: {
+    width: 110,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.3)',
+    borderRadius: 12,
+    padding: 8,
+    minHeight: 180,
+    justifyContent: 'space-between',
+  },
+  weekColToday: {
+    backgroundColor: 'rgba(200, 158, 92, 0.05)',
+    borderColor: COLORS.gothicGold,
+  },
+  weekColHeader: {
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.2)',
+    paddingBottom: 6,
+    marginBottom: 8,
+  },
+  weekColDayName: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+  },
+  weekColNumBg: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  weekColNumBgToday: {
+    backgroundColor: COLORS.gothicGold,
+  },
+  weekColNumText: {
+    fontFamily: FONTS.mono,
+    fontSize: 10.5,
+    color: COLORS.gray300,
+  },
+  weekColQuestsScroll: {
+    flex: 1,
+  },
+  weekQuestBadge: {
+    padding: 4,
+    borderRadius: 4,
+    borderWidth: 0.5,
+  },
+  weekQuestBadgeCompleted: {
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderColor: COLORS.gothicBorder,
+  },
+  weekQuestBadgeHard: {
+    backgroundColor: 'rgba(164, 44, 56, 0.1)',
+    borderColor: 'rgba(164, 44, 56, 0.3)',
+  },
+  weekQuestBadgeMedium: {
+    backgroundColor: 'rgba(200, 158, 92, 0.1)',
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+  },
+  weekQuestBadgeEasy: {
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+  },
+  weekQuestTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 7.5,
+    color: COLORS.gray300,
+    textTransform: 'uppercase',
+  },
+  quietHourCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  quietHourText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    color: COLORS.gray600,
+    textTransform: 'uppercase',
+  },
+  weekColFooter: {
+    fontFamily: FONTS.mono,
+    fontSize: 6.5,
+    color: COLORS.gray600,
+    textAlign: 'center',
+    marginTop: 6,
+    letterSpacing: 0.5,
+  },
+  dayGrid: {
+    width: '100%',
+  },
+  dayHeaderBar: {
+    flexDirection: 'column',
+    gap: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  dayHeaderBarTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11.5,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    textTransform: 'uppercase',
+  },
+  dayHeaderBarSubtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+  },
+  dayLiturgyBtn: {
+    backgroundColor: 'rgba(200, 158, 92, 0.15)',
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+  },
+  dayLiturgyBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gothicGold,
+    textTransform: 'uppercase',
+  },
+  hourlyContainer: {
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  hourRow: {
+    flexDirection: 'row',
+    minHeight: 48,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(46, 50, 62, 0.2)',
+  },
+  hourLabelCol: {
+    width: 80,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRightWidth: 0.5,
+    borderRightColor: 'rgba(46, 50, 62, 0.3)',
+    padding: 8,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  hourLabelNum: {
+    fontFamily: FONTS.mono,
+    fontSize: 9.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  hourLabelName: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    color: COLORS.gray500,
+    marginTop: 1,
+  },
+  hourQuestsCol: {
+    flex: 1,
+    padding: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  perfectStillnessText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray600,
+    textTransform: 'uppercase',
+  },
+  hourQuestItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 0.5,
+  },
+  hourQuestCompleted: {
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderColor: 'rgba(200, 158, 92, 0.1)',
+  },
+  hourQuestHard: {
+    backgroundColor: 'rgba(164, 44, 56, 0.1)',
+    borderColor: 'rgba(164, 44, 56, 0.25)',
+  },
+  hourQuestMedium: {
+    backgroundColor: 'rgba(200, 158, 92, 0.1)',
+    borderColor: 'rgba(200, 158, 92, 0.25)',
+  },
+  hourQuestEasy: {
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderColor: 'rgba(56, 189, 248, 0.25)',
+  },
+  hourQuestTick: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gothicGold,
+  },
+  hourQuestTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 8.5,
+    color: COLORS.gray300,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10, 11, 13, 0.95)',
+    zIndex: 2000,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 500,
+    height: '80%',
+    backgroundColor: COLORS.gothicCard,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+    borderRadius: 16,
+    padding: 16,
+    position: 'relative',
+  },
+  modalCorner: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderColor: COLORS.gothicGold,
+    opacity: 0.45,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.3)',
+    paddingBottom: 10,
+  },
+  modalHeaderTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11.5,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+  },
+  modalHeaderDate: {
+    fontFamily: FONTS.mono,
+    fontSize: 9.5,
+    color: COLORS.gray300,
+    marginTop: 2,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  modalHeaderClose: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  modalHeaderCloseText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray400,
+  },
+  listSection: {
+    marginBottom: 16,
+  },
+  listSectionTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  quietStatusText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray600,
+    fontStyle: 'italic',
+    paddingLeft: 8,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(46, 50, 62, 0.2)',
+    textTransform: 'uppercase',
+  },
+  modalQuestItem: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderWidth: 0.5,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 6,
+  },
+  modalQuestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  modalQuestTitleCompleted: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    color: 'rgba(200, 158, 92, 0.5)',
+    textDecorationLine: 'line-through',
+    textTransform: 'uppercase',
+    flex: 1,
+  },
+  modalQuestTitlePending: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    color: COLORS.gray300,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    flex: 1,
+  },
+  modalQuestTitleMissed: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    color: COLORS.gothicCrimson,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    flex: 1,
+  },
+  pendingIndicatorBox: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.gothicSky,
+  },
+  inspectIcon: {
+    padding: 4,
+  },
+  inspectPanel: {
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(46, 50, 62, 0.2)',
+    marginTop: 8,
+    paddingTop: 8,
+    gap: 6,
+  },
+  inspectLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  inspectNotesInput: {
+    width: '100%',
+    height: 48,
+    backgroundColor: COLORS.gothicDark,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    color: COLORS.gray300,
+    fontSize: 11,
+    fontFamily: FONTS.sans,
+    textAlignVertical: 'top',
+  },
+  saveNotesBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(200, 158, 92, 0.15)',
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  saveNotesBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gothicGold,
+    textTransform: 'uppercase',
+  },
+  inspectRescheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(46, 50, 62, 0.1)',
+    paddingTop: 8,
+  },
+  inspectDateInput: {
+    height: 28,
+    backgroundColor: COLORS.gothicDark,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    color: '#fff',
+    fontSize: 10.5,
+    fontFamily: FONTS.mono,
+    marginTop: 4,
+  },
+  saveScheduleBtn: {
+    backgroundColor: 'rgba(200, 158, 92, 0.15)',
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 12,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(46, 50, 62, 0.3)',
+    paddingTop: 10,
+    marginTop: 8,
+  },
+  modalFooterInscribeBtn: {
+    backgroundColor: 'rgba(200, 158, 92, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  modalFooterInscribeBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  modalFooterCloseBtn: {
+    backgroundColor: COLORS.gothicGold,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  modalFooterCloseBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: '#000',
+    fontWeight: 'bold',
+  }
+});
+export default GothicCalendar;

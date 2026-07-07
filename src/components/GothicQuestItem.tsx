@@ -1,8 +1,24 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { ShieldAlert, Trash2, CheckCircle2, Circle, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  Animated, 
+  Easing, 
+  StyleSheet, 
+  LayoutAnimation, 
+  Platform, 
+  UIManager 
+} from 'react-native';
+import { ShieldAlert, Trash2, CheckCircle2, Circle, ChevronDown } from 'lucide-react-native';
 import { Quest } from '../types';
 import { soundEngine } from '../utils/audio';
+import { COLORS, FONTS } from '../theme';
+
+// Enable layout animation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface GothicQuestItemProps {
   quest: Quest;
@@ -10,39 +26,117 @@ interface GothicQuestItemProps {
   onDelete: (id: string) => void;
 }
 
+interface FloatingTextProps {
+  text: string;
+  onAnimComplete: () => void;
+}
+
+const FloatingText: React.FC<FloatingTextProps> = ({ text, onAnimComplete }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 900,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      onAnimComplete();
+    });
+  }, []);
+
+  const translateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -45],
+  });
+
+  const opacity = anim.interpolate({
+    inputRange: [0, 0.8, 1],
+    outputRange: [1, 1, 0],
+  });
+
+  const scale = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.25],
+  });
+
+  return (
+    <Animated.Text
+      style={[
+        styles.floatingText,
+        {
+          transform: [{ translateY }, { scale }],
+          opacity,
+        }
+      ]}
+    >
+      {text}
+    </Animated.Text>
+  );
+};
+
+// Shimmer Slash Helper
+const SlashOverlay = () => {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 400,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const translateX = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-250, 250],
+  });
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Animated.View 
+        style={[
+          styles.shimmerSlash, 
+          { 
+            transform: [{ translateX }, { rotate: '-45deg' }] 
+          }
+        ]} 
+      />
+    </View>
+  );
+};
+
 export const GothicQuestItem: React.FC<GothicQuestItemProps> = ({ 
   quest, 
   onComplete, 
   onDelete
 }) => {
   const [slashing, setSlashing] = useState(false);
-  const [floatingEff, setFloatingEff] = useState<{ active: boolean; text: string; id: number }[]>([]);
-  const [uniqueId, setUniqueId] = useState(0);
+  const [floaters, setFloaters] = useState<{ id: number; text: string }[]>([]);
+  const [floaterId, setFloaterId] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
 
   const handleComplete = () => {
     if (quest.completed || slashing) return;
     
-    // Play sharp metallic clashing blade sounds
     soundEngine.playSlash();
     setSlashing(true);
 
-    // Build floaters with immersive game labels
-    const newId = uniqueId + 1;
-    setUniqueId(newId);
+    const nextId = floaterId + 1;
+    setFloaterId(nextId);
     
-    let floatText = `Absolved`;
-    if (quest.difficulty === 'Mortal Penance') floatText = `Vow Fulfilled`;
-    if (quest.difficulty === 'Sinuous Vow') floatText = `Trial Conquered`;
+    let floatText = 'Absolved';
+    if (quest.difficulty === 'Mortal Penance') floatText = 'Vow Fulfilled';
+    if (quest.difficulty === 'Sinuous Vow') floatText = 'Trial Conquered';
     
-    setFloatingEff(prev => [...prev, { active: true, text: floatText, id: newId }]);
+    setFloaters(prev => [...prev, { id: nextId, text: floatText }]);
 
-    // Complete after slash animation completes
     setTimeout(() => {
       soundEngine.playSoulsClaimed();
       onComplete(quest.id);
       setSlashing(false);
-    }, 400);
+    }, 450);
   };
 
   const handleDelete = () => {
@@ -50,15 +144,21 @@ export const GothicQuestItem: React.FC<GothicQuestItemProps> = ({
     onDelete(quest.id);
   };
 
-  const getDifficultyColor = (diff: string) => {
+  const toggleExpand = () => {
+    soundEngine.playClick();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsExpanded(!isExpanded);
+  };
+
+  const getDifficultyStyles = (diff: string) => {
     switch (diff) {
       case 'Mortal Penance':
-        return 'text-gothic-crimson border-gothic-crimson/40 bg-gothic-crimson/10';
+        return { color: COLORS.gothicCrimson, borderColor: 'rgba(164, 44, 56, 0.4)', backgroundColor: 'rgba(164, 44, 56, 0.1)' };
       case 'Sinuous Vow':
-        return 'text-gothic-gold border-gothic-gold/40 bg-gothic-gold/10';
+        return { color: COLORS.gothicGold, borderColor: 'rgba(200, 158, 92, 0.4)', backgroundColor: 'rgba(200, 158, 92, 0.1)' };
       case 'Lesser Burden':
       default:
-        return 'text-gothic-sky border-gothic-sky/40 bg-gothic-sky/10';
+        return { color: COLORS.gothicSky, borderColor: 'rgba(56, 189, 248, 0.4)', backgroundColor: 'rgba(56, 189, 248, 0.1)' };
     }
   };
 
@@ -76,169 +176,333 @@ export const GothicQuestItem: React.FC<GothicQuestItemProps> = ({
     ? Math.max(0, Math.ceil((new Date(quest.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))
     : null;
 
+  const diffStyle = getDifficultyStyles(quest.difficulty);
+
   return (
-    <motion.div
-      id={`quest-${quest.id}`}
-      layout
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -60, transition: { duration: 0.3 } }}
-      whileHover={{ y: -1 }}
-      className={`relative p-3.5 rounded-xl border transition-all duration-300 overflow-hidden ${
+    <View 
+      style={[
+        styles.card,
         quest.completed 
-          ? 'bg-gothic-back/40 border-gothic-border/15 text-gray-500' 
+          ? styles.cardCompleted 
           : isOverdue 
-          ? 'bg-gothic-crimson/5 border-gothic-crimson/30 hover:border-gothic-crimson/60'
-          : 'bg-gothic-card border-gothic-border hover:border-gothic-gold-dim'
-      }`}
+          ? styles.cardOverdue 
+          : styles.cardActive
+      ]}
     >
-      {/* Absolute Slash Overlay Indicator */}
-      {slashing && (
-        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
-          <div className="w-full h-8 bg-white shimmer-slash animate-nail-slash" />
-        </div>
-      )}
+      
+      {/* Slash Shimmer Effect overlay */}
+      {slashing && <SlashOverlay />}
 
-      {/* Floaters effect layer */}
-      <AnimatePresence>
-        {floatingEff.map(eff => (
-          <motion.span
-            key={eff.id}
-            initial={{ opacity: 1, y: 0 }}
-            animate={{ opacity: 0, y: -50, scale: 1.25 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.9 }}
-            onAnimationComplete={() => {
-              setFloatingEff(prev => prev.filter(p => p.id !== eff.id));
+      {/* Floating text labels layer */}
+      <View style={styles.floatersLayer} pointerEvents="none">
+        {floaters.map(f => (
+          <FloatingText 
+            key={f.id} 
+            text={f.text} 
+            onAnimComplete={() => {
+              setFloaters(prev => prev.filter(p => p.id !== f.id));
             }}
-            className="absolute z-30 font-cinzel text-xs font-semibold text-gothic-gold pointer-events-none tracking-widest uppercase"
-            style={{ right: '15%', top: '35%' }}
-          >
-            {eff.text}
-          </motion.span>
+          />
         ))}
-      </AnimatePresence>
+      </View>
 
-      <div className="flex items-start gap-3">
-        {/* Ornate Thorn Checkbox/Absolution Trigger */}
-        <button
-          id={`complete-btn-${quest.id}`}
-          onClick={handleComplete}
+      <View style={styles.row}>
+        
+        {/* Thorn Checkbox */}
+        <TouchableOpacity
+          onPress={handleComplete}
           disabled={quest.completed}
-          className={`mt-0.5 text-left flex-shrink-0 cursor-pointer focus:outline-none transition-transform duration-200 active:scale-95 ${
-            quest.completed ? 'text-gothic-gold-dim cursor-default' : 'text-gray-400 hover:text-gothic-gold'
-          }`}
+          style={styles.checkboxTouch}
         >
           {quest.completed ? (
-            <div className="relative p-0.5">
-              <CheckCircle2 className="w-5 h-5 stroke-[1.5]" />
-              <div className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-gothic-gold" />
-            </div>
+            <View style={styles.completedCheckbox}>
+              <CheckCircle2 size={18} color={COLORS.gothicGold} />
+              <View style={styles.checkboxDot} />
+            </View>
           ) : (
-            <div className="relative p-0.5 group">
-              <Circle className="w-5 h-5 stroke-[1.2] group-hover:scale-105 group-hover:stroke-gothic-gold transition-all" />
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 text-[8px] text-gothic-gold transition-opacity">
-                †
-              </div>
-            </div>
+            <View style={styles.emptyCheckbox}>
+              <Circle size={18} color={COLORS.gray500} />
+              <Text style={styles.crossSymbol}>†</Text>
+            </View>
           )}
-        </button>
+        </TouchableOpacity>
 
-        {/* Quest Information */}
-        <div 
-          onClick={() => {
-            soundEngine.playClick();
-            setIsExpanded(!isExpanded);
-          }}
-          className="flex-grow min-w-0 cursor-pointer select-none group/info animate-fade-in"
+        {/* Quest Info Section */}
+        <TouchableOpacity 
+          style={styles.infoTouch} 
+          onPress={toggleExpand}
+          activeOpacity={0.8}
         >
-          <div className="flex flex-wrap items-center gap-1.5 mb-1">
-            {/* Category */}
-            <span className="font-mono text-[8.5px] uppercase tracking-widest text-gray-500">
-              {getCategorySymbol(quest.category)}
-            </span>
+          <View style={styles.badgeRow}>
+            <Text style={styles.categoryText}>{getCategorySymbol(quest.category)}</Text>
+            
+            <View style={[styles.diffBadge, { borderColor: diffStyle.borderColor, backgroundColor: diffStyle.backgroundColor }]}>
+              <Text style={[styles.diffText, { color: diffStyle.color }]}>{quest.difficulty.toUpperCase()}</Text>
+            </View>
 
-            {/* Difficulty Badge */}
-            <span className={`px-1.5 py-0.2 rounded text-[7.5px] font-mono font-bold tracking-widest uppercase border ${getDifficultyColor(quest.difficulty)}`}>
-              {quest.difficulty}
-            </span>
-
-            {/* Overdue Alert */}
             {isOverdue && (
-              <span className="flex items-center gap-1 px-1.5 py-0.2 rounded text-[7.5px] font-mono font-bold bg-gothic-crimson/20 text-gothic-crimson border border-gothic-crimson/30 uppercase tracking-wider animate-pulse">
-                <ShieldAlert className="w-2.5 h-2.5" />
-                DREAD OVERDUE
-              </span>
+              <View style={styles.overdueBadge}>
+                <ShieldAlert size={10} color={COLORS.gothicCrimson} />
+                <Text style={styles.overdueText}>DREAD OVERDUE</Text>
+              </View>
             )}
 
             {daysLeft !== null && daysLeft <= 2 && !quest.completed && (
-              <span className="flex items-center gap-1 px-1.5 py-0.2 rounded text-[7.5px] font-mono text-gothic-gold bg-gothic-gold/10 border border-gothic-gold/20 tracking-wider">
-                ⏳ {daysLeft === 0 ? 'FADES TONIGHT' : `${daysLeft} days left`}
-              </span>
+              <View style={styles.fadesBadge}>
+                <Text style={styles.fadesText}>⏳ {daysLeft === 0 ? 'FADES TONIGHT' : `${daysLeft} days left`}</Text>
+              </View>
             )}
-          </div>
+          </View>
 
-          {/* Title and Expansion Indicator */}
-          <div className="flex items-center justify-between gap-2.5">
-            <h3 
-              className={`font-cinzel tracking-wide text-sm transition-all duration-350 pr-4 ${
-                quest.completed 
-                  ? 'line-through text-gray-600 italic translate-x-1 decoration-gothic-border' 
-                  : 'text-gray-200 group-hover/info:text-gothic-gold'
-              }`}
+          <View style={styles.titleRow}>
+            <Text 
+              style={[
+                styles.questTitle,
+                quest.completed ? styles.titleCompleted : styles.titleActive
+              ]}
+              numberOfLines={2}
             >
               {quest.title}
-            </h3>
-            {(quest.description || quest.dueDate) && (
-              <ChevronDown className={`w-3.5 h-3.5 text-gray-500 group-hover/info:text-gothic-gold transition-transform duration-220 shrink-0 ${
-                isExpanded ? 'rotate-180 text-gothic-gold font-bold' : ''
-              }`} />
-            )}
-          </div>
+            </Text>
+            
+            {(quest.description || quest.dueDate) ? (
+              <ChevronDown 
+                size={14} 
+                color={isExpanded ? COLORS.gothicGold : COLORS.gray500} 
+                style={isExpanded ? { transform: [{ rotate: '180deg' }] } : undefined}
+              />
+            ) : null}
+          </View>
 
-          {/* Optional description or due date expanded area */}
-          <AnimatePresence initial={false}>
-            {isExpanded && (quest.description || quest.dueDate) && (
-              <motion.div
-                initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                animate={{ height: 'auto', opacity: 1, marginTop: 6 }}
-                exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                transition={{ duration: 0.22, ease: "easeOut" }}
-                className="overflow-hidden border-t border-gothic-border/10 pt-2"
-                onClick={(e) => e.stopPropagation()} // Prevent clicking the expanded text from collapsing immediately
-              >
-                {quest.description && (
-                  <p className={`font-sans text-xs leading-relaxed transition-colors duration-300 ${
-                    quest.completed ? 'text-gray-700' : 'text-gray-400'
-                  }`}>
-                    {quest.description}
-                  </p>
-                )}
+          {/* Expanded Block */}
+          {isExpanded && (quest.description || quest.dueDate) && (
+            <View style={styles.expandedContent}>
+              {quest.description ? (
+                <Text style={[styles.description, quest.completed ? { color: COLORS.gray700 } : { color: COLORS.gray400 }]}>
+                  {quest.description}
+                </Text>
+              ) : null}
 
-                {/* Due date if exists */}
-                {quest.dueDate && !quest.completed && (
-                  <div className={`text-[8.5px] font-mono text-gray-500 uppercase tracking-widest flex justify-between items-center bg-black/10 px-2 py-1 rounded-lg border border-gothic-border/10 ${quest.description ? 'mt-2.5' : ''}`}>
-                    <span className="text-[7.5px] text-gray-400">📅 JUDGMENT DUE:</span>
-                    <span className="text-gothic-gold font-bold">
-                      {new Date(quest.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+              {quest.dueDate && !quest.completed ? (
+                <View style={styles.dueDateRow}>
+                  <Text style={styles.dueDateHeader}>📅 JUDGMENT DUE:</Text>
+                  <Text style={styles.dueDateText}>
+                    {new Date(quest.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          )}
 
-        {/* Purge / Obliterate Button */}
-        <button
-          id={`delete-btn-${quest.id}`}
-          onClick={handleDelete}
-          className="p-1 text-gray-600 hover:text-gothic-crimson hover:bg-gothic-crimson/10 rounded-lg transition-all focus:outline-none shrink-0 self-center"
-          title="Purge Task From Ledger"
-        >
-          <Trash2 className="w-3.5 h-3.5 stroke-[1.5]" />
-        </button>
-      </div>
-    </motion.div>
+        </TouchableOpacity>
+
+        {/* Obliterate/Purge button */}
+        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+          <Trash2 size={14} color={COLORS.gray600} />
+        </TouchableOpacity>
+
+      </View>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  card: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginVertical: 4,
+    width: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  cardActive: {
+    backgroundColor: COLORS.gothicCard,
+    borderColor: COLORS.gothicBorder,
+  },
+  cardCompleted: {
+    backgroundColor: 'rgba(10, 11, 13, 0.4)',
+    borderColor: 'rgba(46, 50, 62, 0.25)',
+  },
+  cardOverdue: {
+    backgroundColor: 'rgba(164, 44, 56, 0.05)',
+    borderColor: 'rgba(164, 44, 56, 0.3)',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  checkboxTouch: {
+    paddingRight: 8,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  completedCheckbox: {
+    position: 'relative',
+  },
+  checkboxDot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: COLORS.gothicGold,
+  },
+  emptyCheckbox: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  crossSymbol: {
+    position: 'absolute',
+    fontSize: 8,
+    color: COLORS.gray600,
+    top: 5,
+  },
+  infoTouch: {
+    flex: 1,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  categoryText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+  },
+  diffBadge: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  diffText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  overdueBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(164, 44, 56, 0.2)',
+    borderColor: 'rgba(164, 44, 56, 0.3)',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  overdueText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    fontWeight: 'bold',
+    color: COLORS.gothicCrimson,
+  },
+  fadesBadge: {
+    backgroundColor: 'rgba(200, 158, 92, 0.1)',
+    borderColor: 'rgba(200, 158, 92, 0.2)',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  fadesText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gothicGold,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  questTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 13,
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  titleActive: {
+    color: COLORS.gray300,
+  },
+  titleCompleted: {
+    color: COLORS.gray600,
+    textDecorationLine: 'line-through',
+    fontStyle: 'italic',
+  },
+  expandedContent: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(46, 50, 62, 0.15)',
+    marginTop: 6,
+    paddingTop: 6,
+  },
+  description: {
+    fontFamily: FONTS.sans,
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
+  dueDateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.15)',
+    marginTop: 8,
+  },
+  dueDateHeader: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray400,
+  },
+  dueDateText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  deleteBtn: {
+    padding: 6,
+    marginLeft: 8,
+    borderRadius: 8,
+  },
+  shimmerSlash: {
+    position: 'absolute',
+    width: 40,
+    height: 300,
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    top: -100,
+  },
+  floatersLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 99,
+  },
+  floatingText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  }
+});
+export default GothicQuestItem;

@@ -1,5 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  ScrollView, 
+  KeyboardAvoidingView, 
+  Platform, 
+  ActivityIndicator, 
+  StyleSheet,
+  Animated,
+  Easing
+} from 'react-native';
 import { 
   User, 
   Mail, 
@@ -15,9 +27,11 @@ import {
   AlertTriangle,
   RefreshCw,
   Award
-} from 'lucide-react';
+} from 'lucide-react-native';
 import { Goal, Quest } from '../types';
 import { loadUserBundle, saveGoal, saveQuests, saveUserProfile, sendPasswordReset, signInWithPassword, signUpWithPassword } from '../lib/supabase';
+import { generateGoalPlan, getApiKey } from '../utils/aiEngine';
+import { COLORS, FONTS, THEME_STYLES } from '../theme';
 
 interface IcarusAuthPortalProps {
   onLoginSuccess: (userData: {
@@ -45,35 +59,99 @@ type Mode = 'WELCOME' | 'LOGIN' | 'SIGNUP' | 'FORGOT_PASS' | 'GENERATING_CHAR' |
 export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSuccess, soundEngine }) => {
   const [mode, setMode] = useState<Mode>('WELCOME');
   
-  // Field states
+  // Sigil Animations
+  const sigilRotateCw = useRef(new Animated.Value(0)).current;
+  const sigilRotateCcw = useRef(new Animated.Value(0)).current;
+  const sigilPulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    let cwLoop: Animated.CompositeAnimation | null = null;
+    let ccwLoop: Animated.CompositeAnimation | null = null;
+    let pulseLoop: Animated.CompositeAnimation | null = null;
+
+    if (mode === 'WELCOME') {
+      sigilRotateCw.setValue(0);
+      sigilRotateCcw.setValue(0);
+      sigilPulse.setValue(1);
+
+      cwLoop = Animated.loop(
+        Animated.timing(sigilRotateCw, {
+          toValue: 1,
+          duration: 25000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      cwLoop.start();
+
+      ccwLoop = Animated.loop(
+        Animated.timing(sigilRotateCcw, {
+          toValue: 1,
+          duration: 15000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      ccwLoop.start();
+
+      pulseLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(sigilPulse, {
+            toValue: 1.08,
+            duration: 2000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(sigilPulse, {
+            toValue: 1,
+            duration: 2000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          })
+        ])
+      );
+      pulseLoop.start();
+    }
+
+    return () => {
+      if (cwLoop) cwLoop.stop();
+      if (ccwLoop) ccwLoop.stop();
+      if (pulseLoop) pulseLoop.stop();
+    };
+  }, [mode]);
+
+  const spinSigilCw = sigilRotateCw.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const spinSigilCcw = sigilRotateCcw.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '-360deg'],
+  });
+
+  // Fields
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [preferredName, setPreferredName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [timezone, setTimezone] = useState(() => {
-    try {
-      return Intl.DateTimeFormat().resolvedOptions().timeZone;
-    } catch {
-      return 'UTC';
-    }
-  });
+  const [timezone, setTimezone] = useState('UTC');
 
-  // UI Flow lists & states
+  // UI Flow Status
   const [errorStatus, setErrorStatus] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Character generation indicators
+  // Character generation ticking states
   const [charGenStep, setCharGenStep] = useState(0);
   const [registeredUserResponse, setRegisteredUserResponse] = useState<any>(null);
 
-  // Onboarding first campaign settings
+  // Onboarding settings
   const [firstAspiration, setFirstAspiration] = useState('');
   const [plannedCampaign, setPlannedCampaign] = useState<Goal | null>(null);
 
-  // Presets of gothic goals to help starting players
   const presetAspirations = [
     { title: 'Learn Guitar', rpg: 'Resonate the Mystic Lute Strings' },
     { title: 'Become Fit', rpg: 'Vessel of Agony Calisthenics' },
@@ -82,7 +160,6 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     { title: 'Sleep Better', rpg: 'Shadow Rest & Slumber Vigil' }
   ];
 
-  // Steps list for Character Generation process
   const charGenSteps = [
     "Carving Starting Monument...",
     "Binding Initial Geometry Seed...",
@@ -90,7 +167,6 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     "Emptying Chronicles Ledger..."
   ];
 
-  // Dynamic step trigger for character generation
   useEffect(() => {
     if (mode === 'GENERATING_CHAR') {
       const interval = setInterval(() => {
@@ -116,9 +192,8 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     setMode(newMode);
   };
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) {
+  const handleLoginSubmit = async () => {
+    if (!email.trim() || !password) {
       setErrorStatus('Provide email and password seals.');
       return;
     }
@@ -126,8 +201,8 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     setIsLoading(true);
     setErrorStatus('');
     try {
-      const user = await signInWithPassword(email, password);
-      const userData = await loadUserBundle(user.id, user.email || email, user.user_metadata);
+      const user = await signInWithPassword(email.trim(), password);
+      const userData = await loadUserBundle(user.id, user.email || email.trim(), user.user_metadata);
 
       if (!userData.characterProfile) {
         // Build initial character details
@@ -150,22 +225,10 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
           monumentSeed: monumentSeed,
           created_at: signupDate,
           stats: {
-            strength: 10,
-            endurance: 10,
-            discipline: 10,
-            recovery: 10,
-            focus: 10,
-            consistency: 10,
-            learningSpeed: 10,
-            resilience: 10,
-            programming: 10,
-            mathematics: 10,
-            finance: 10,
-            communication: 10,
-            creativity: 10,
-            leadership: 10,
-            networking: 10,
-            collaboration: 10
+            strength: 10, endurance: 10, discipline: 10, recovery: 10,
+            focus: 10, consistency: 10, learningSpeed: 10, resilience: 10,
+            programming: 10, mathematics: 10, finance: 10, communication: 10,
+            creativity: 10, leadership: 10, networking: 10, collaboration: 10
           },
           chronicle: [
             {
@@ -251,8 +314,7 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     }
   };
 
-  const handleSignupSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSignupSubmit = async () => {
     setErrorStatus('');
 
     if (!displayName.trim()) {
@@ -275,57 +337,44 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     setIsLoading(true);
     try {
       const metadata = {
-        display_name: displayName,
-        preferred_name: preferredName || "",
+        display_name: displayName.trim(),
+        preferred_name: preferredName.trim() || "",
         date_of_birth: dateOfBirth || "",
         timezone: timezone || "UTC"
       };
 
-      const { user, session } = await signUpWithPassword(email, password, metadata);
+      const { user, session } = await signUpWithPassword(email.trim(), password, metadata);
       const userId = user.id;
       const signupDate = new Date().toISOString();
 
       const geometrySeed = Math.floor(Math.random() * 10000000);
       const monumentSeed = `monument-${userId}-${Math.floor(Math.random() * 999999)}`;
-      const startingTitle = preferredName ? preferredName : "The Wanderer";
+      const startingTitle = preferredName.trim() ? preferredName.trim() : "The Wanderer";
 
-      // 2. Build initial character details
       const characterProfile = {
         id: userId,
-        name: displayName,
+        name: displayName.trim(),
         title: startingTitle,
         xp: 0,
         accountCreated: signupDate,
-        preferredName: preferredName || "The Wanderer",
+        preferredName: preferredName.trim() || "The Wanderer",
         dateOfBirth: dateOfBirth || "",
         timezone: timezone || "UTC",
         avatarSeed: String(geometrySeed),
         monumentSeed: monumentSeed,
         created_at: signupDate,
         stats: {
-          strength: 10,
-          endurance: 10,
-          discipline: 10,
-          recovery: 10,
-          focus: 10,
-          consistency: 10,
-          learningSpeed: 10,
-          resilience: 10,
-          programming: 10,
-          mathematics: 10,
-          finance: 10,
-          communication: 10,
-          creativity: 10,
-          leadership: 10,
-          networking: 10,
-          collaboration: 10
+          strength: 10, endurance: 10, discipline: 10, recovery: 10,
+          focus: 10, consistency: 10, learningSpeed: 10, resilience: 10,
+          programming: 10, mathematics: 10, finance: 10, communication: 10,
+          creativity: 10, leadership: 10, networking: 10, collaboration: 10
         },
         chronicle: [
           {
             id: `chron-init-${Date.now()}`,
             timeframe: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
             bullets: [
-              `Entered the domain of ICARUS as ${displayName} (${startingTitle}).`,
+              `Entered the domain of ICARUS as ${displayName.trim()} (${startingTitle}).`,
               `Swore initial mental and physical covenants under starting seed ${geometrySeed}.`
             ]
           }
@@ -380,8 +429,8 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
       const newUserPayload = {
         id: userId,
         email: email.toLowerCase(),
-        display_name: displayName,
-        preferred_name: preferredName || "",
+        display_name: displayName.trim(),
+        preferred_name: preferredName.trim() || "",
         date_of_birth: dateOfBirth || "",
         timezone: timezone || "UTC",
         level: 1,
@@ -402,21 +451,19 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
       }
 
       await saveUserProfile(newUserPayload);
-
       soundEngine.playQuestInscribe();
       setRegisteredUserResponse(newUserPayload);
       setCharGenStep(0);
       setMode('GENERATING_CHAR');
     } catch (err: any) {
       setErrorStatus(err.message || 'Registration failed.');
-    } finally {
+    } {
       setIsLoading(false);
     }
   };
 
-  const handlePasswordReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) {
+  const handlePasswordResetSubmit = async () => {
+    if (!email.trim()) {
       setErrorStatus('Confirm email seal first.');
       return;
     }
@@ -424,7 +471,7 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     setIsLoading(true);
     setErrorStatus('');
     try {
-      await sendPasswordReset(email);
+      await sendPasswordReset(email.trim());
       setSuccessMessage('Thy reset scroll has been sent to thy email address.');
       setTimeout(() => {
         setMode('LOGIN');
@@ -442,23 +489,19 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
       return;
     }
 
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      setErrorStatus('AI is unavailable. Please come back later.');
+      return;
+    }
+
     setIsLoading(true);
     setErrorStatus('');
     try {
-      const res = await fetch('/api/ai/plan-goal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ aspiration: firstAspiration })
-      });
-
-      // Special rule requested by user:
-      // "while creating tasks if the ai is unavailable say unavailable and do not create anything just tell them come back later"
-      if (!res.ok) {
-        throw new Error('AI is unavailable. Please come back later.');
-      }
-
-      const campaignData = await res.json();
-      if (!campaignData || campaignData.error) {
+      const campaignData = await generateGoalPlan(firstAspiration.trim());
+      
+      // If AI returned an error or is somehow invalid, report unavailable
+      if (!campaignData || (campaignData as any).error) {
         throw new Error('AI is unavailable. Please come back later.');
       }
 
@@ -466,8 +509,7 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
       setPlannedCampaign(campaignData);
       setMode('CONFIRM_ONBOARDING');
     } catch (err: any) {
-      // Handle unavailable errors - strictly say "AI is unavailable. Please come back later."
-      setErrorStatus(err.message || 'AI is unavailable. Please come back later.');
+      setErrorStatus('AI is unavailable. Please come back later.');
     } finally {
       setIsLoading(false);
     }
@@ -479,10 +521,8 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
       setIsLoading(true);
       const finalUserPayload = { ...registeredUserResponse };
       if (plannedCampaign) {
-        // Enforce first campaign integration
         finalUserPayload.goals = [plannedCampaign];
         
-        // Add tasks to default quests
         const initialTasks = plannedCampaign.stages && plannedCampaign.stages[0]?.tasks;
         let onboardingQuests: Quest[] = [];
         if (initialTasks && initialTasks.length > 0) {
@@ -499,16 +539,15 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
           finalUserPayload.quests = onboardingQuests;
         }
 
-        // Record chronicle bullet
         if (finalUserPayload.characterProfile) {
           if (!finalUserPayload.characterProfile.chronicle) {
             finalUserPayload.characterProfile.chronicle = [];
           }
-          finalUserPayload.characterProfile.chronicle.push({
+          finalUserPayload.characterProfile.chronicle.unshift({
             id: `chron-campaign-${Date.now()}`,
             timeframe: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
             bullets: [
-              `Initiated ancient campaign: ${plannedCampaign.title || plannedCampaign.name}`,
+              `Initiated ancient campaign: ${plannedCampaign.title}`,
               `Embraced primary learning cycle with focus: ${firstAspiration}`
             ]
           });
@@ -516,17 +555,15 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
 
         try {
           const userId = finalUserPayload.id;
-          const batchPromises: Promise<any>[] = [];
-          
-          batchPromises.push(saveGoal(userId, plannedCampaign));
-          batchPromises.push(saveQuests(userId, onboardingQuests));
-          batchPromises.push(saveUserProfile({
-            ...finalUserPayload,
-            quests: [],
-            goals: []
-          }));
-          
-          await Promise.all(batchPromises);
+          await Promise.all([
+            saveGoal(userId, plannedCampaign),
+            saveQuests(userId, onboardingQuests),
+            saveUserProfile({
+              ...finalUserPayload,
+              quests: [],
+              goals: []
+            })
+          ]);
         } catch (dbErr) {
           console.error("Failed writing onboarding data to Supabase: ", dbErr);
         } finally {
@@ -538,717 +575,892 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gothic-back relative overflow-hidden font-sans select-none">
-      
-      {/* Background ambient symbols */}
-      <div className="absolute inset-x-0 top-0 h-96 bg-gradient-to-b from-gothic-gold/5 via-transparent to-transparent pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gothic-gold/[0.02] rounded-full border border-gothic-border/20 pointer-events-none animate-pulse-blood" />
-
-      <AnimatePresence mode="wait">
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.keyboardContainer}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         
-        {/* SCREEN 1: WELCOME */}
+        {/* Mode: WELCOME */}
         {mode === 'WELCOME' && (
-          <motion.div 
-            key="welcome"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            className="w-full max-w-lg p-5 xs:p-8 sm:p-10 rounded-2xl border border-gothic-border/60 bg-gothic-card/90 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-center relative z-10 mx-auto"
-          >
-            {/* Minimalist geometric sigil */}
-            <motion.div 
-              className="w-24 h-24 mx-auto mb-8 flex items-center justify-center relative group cursor-pointer"
-              initial={{ scale: 0.8, opacity: 0, rotate: -45 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              transition={{ duration: 1.5, ease: "easeOut" }}
-              whileHover={{ scale: 1.05 }}
+          <View style={styles.welcomeBox}>
+            <View style={styles.sigilBox}>
+              <View style={styles.outerGlowCircle} />
+              
+              <Animated.View style={[styles.dashedOuterBorder, { transform: [{ rotate: spinSigilCw }] }]} />
+              
+              <Animated.View style={[styles.secondOrbitContainer, { transform: [{ rotate: spinSigilCcw }] }]}>
+                <View style={styles.secondOrbitCircle} />
+                <View style={styles.secondOrbitBead} />
+              </Animated.View>
+              
+              <Animated.View 
+                style={[
+                  styles.quadrantRing, 
+                  { 
+                    transform: [
+                      { rotate: spinSigilCw }, 
+                      { scale: sigilPulse }
+                    ] 
+                  }
+                ]} 
+              />
+              
+              <View style={styles.raysOverlay} pointerEvents="none">
+                <View style={[styles.rayLine, { transform: [{ rotate: '0deg' }] }]} />
+                <View style={[styles.rayLine, { transform: [{ rotate: '45deg' }] }]} />
+                <View style={[styles.rayLine, { transform: [{ rotate: '90deg' }] }]} />
+                <View style={[styles.rayLine, { transform: [{ rotate: '135deg' }] }]} />
+              </View>
+              
+              <View style={styles.coreSigil}>
+                <Compass size={22} color={COLORS.gothicGold} />
+              </View>
+            </View>
+
+            <Text style={styles.mainTitle}>ICARUS</Text>
+            <Text style={styles.subTitle}>Become Who You Practice To Be</Text>
+
+            <TouchableOpacity 
+              style={[styles.btnPrimary, { marginBottom: 12 }]} 
+              onPress={() => handleModeChange('SIGNUP')}
             >
-              {/* Outer Glow Ring */}
-              <div className="absolute inset-0 rounded-full border border-gothic-gold/20 opacity-30 blur-[2px] group-hover:opacity-60 transition-opacity duration-500" />
-              
-              {/* Ring 1: Clockwise Outer Astrolabe Ring */}
-              <motion.div 
-                className="absolute inset-0 rounded-full border border-dashed border-gothic-gold/40"
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 25, ease: "linear" }}
-              />
+              <Text style={styles.btnPrimaryText}>[ BEGIN JOURNEY ]</Text>
+            </TouchableOpacity>
 
-              {/* Ring 2: Counter-Clockwise Concentric Ring */}
-              <motion.div 
-                className="absolute inset-2 rounded-full border border-gothic-gold/25 before:content-[''] before:absolute before:-top-0.5 before:left-1/2 before:-translate-x-1/2 before:w-1.5 before:h-1.5 before:bg-gothic-gold before:rounded-full before:shadow-[0_0_8px_rgba(200,158,92,1)]"
-                animate={{ rotate: -360 }}
-                transition={{ repeat: Infinity, duration: 15, ease: "linear" }}
-              />
-
-              {/* Ring 3: Concentric Quadrant Rounded Square Ring */}
-              <motion.div 
-                className="absolute inset-4.5 border border-gothic-gold/30 opacity-70"
-                style={{ borderRadius: '25%' }}
-                animate={{ rotate: 360, scale: [1, 1.08, 1] }}
-                transition={{ 
-                  rotate: { repeat: Infinity, duration: 10, ease: "linear" },
-                  scale: { repeat: Infinity, duration: 4, ease: "easeInOut" }
-                }}
-              />
-
-              {/* Inner Decagram/Rays */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-15 group-hover:opacity-45 transition-opacity duration-500">
-                <div className="absolute w-20 h-[1px] bg-gothic-gold/40 transform rotate-0" />
-                <div className="absolute w-20 h-[1px] bg-gothic-gold/40 transform rotate-45" />
-                <div className="absolute w-20 h-[1px] bg-gothic-gold/40 transform rotate-90" />
-                <div className="absolute w-20 h-[1px] bg-gothic-gold/40 transform rotate-135" />
-              </div>
-
-              {/* Core Sigil Element */}
-              <motion.div
-                className="relative z-10 w-11 h-11 rounded-full bg-gothic-card/95 border border-gothic-gold/50 flex items-center justify-center shadow-[0_0_15px_rgba(200,158,92,0.15)] group-hover:shadow-[0_0_25px_rgba(200,158,92,0.4)] transition-all duration-500"
-                whileHover={{ rotate: 180 }}
-                transition={{ duration: 0.8, ease: "easeInOut" }}
-              >
-                <Compass className="w-5 h-5 text-gothic-gold" />
-              </motion.div>
-            </motion.div>
-
-            <h1 className="font-cinzel text-3xl xs:text-4xl sm:text-5xl font-black text-gothic-gold uppercase tracking-[0.15em] sm:tracking-[0.2em] mb-4">
-              ICARUS
-            </h1>
-            <p className="font-cinzel text-[10px] sm:text-xs text-gray-400 uppercase tracking-[0.15em] sm:tracking-[0.25em] mb-8 sm:mb-12 px-2">
-              Become Who You Practice To Be
-            </p>
-
-            <div className="space-y-4">
-              <button
-                onClick={() => handleModeChange('SIGNUP')}
-                className="w-full py-3 sm:py-4 px-3 border border-gothic-gold/50 hover:border-gothic-gold rounded-lg font-cinzel text-[10px] sm:text-xs tracking-[0.1em] sm:tracking-[0.2em] text-white uppercase bg-gothic-gold/5 hover:bg-gothic-gold/15 transition-all duration-300 shadow-[0_0_15px_rgba(200,158,92,0.05)] hover:shadow-[0_0_20px_rgba(200,158,92,0.15)] flex items-center justify-center gap-2 cursor-pointer"
-              >
-                [ Begin Journey ]
-              </button>
-              
-              <button
-                onClick={() => handleModeChange('LOGIN')}
-                className="w-full py-3 sm:py-4 px-3 border border-gothic-border/80 hover:border-gothic-border rounded-lg font-cinzel text-[10px] sm:text-xs tracking-[0.1em] sm:tracking-[0.2em] text-gray-400 hover:text-white uppercase hover:bg-black/40 transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                [ Continue Journey ]
-              </button>
-            </div>
-          </motion.div>
+            <TouchableOpacity 
+              style={styles.btnSecondary} 
+              onPress={() => handleModeChange('LOGIN')}
+            >
+              <Text style={styles.btnSecondaryText}>[ CONTINUE JOURNEY ]</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
-        {/* SCREEN 2: LOGIN */}
+        {/* Mode: LOGIN */}
         {mode === 'LOGIN' && (
-          <motion.div 
-            key="login"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            className="w-full max-w-md p-5 xs:p-7 sm:p-8 rounded-2xl border border-gothic-border bg-gothic-card/90 shadow-[0_0_40px_rgba(0,0,0,0.8)] relative z-10 mx-auto"
-          >
-            <button
-              onClick={() => handleModeChange('WELCOME')}
-              className="absolute top-6 left-6 text-gray-500 hover:text-gothic-gold transition-colors flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-widest cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back
-            </button>
+          <View style={styles.formCard}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => handleModeChange('WELCOME')}>
+              <ArrowLeft size={12} color={COLORS.gray500} />
+              <Text style={styles.backBtnText}>BACK</Text>
+            </TouchableOpacity>
 
-            <div className="text-center mt-4 mb-8">
-              <h2 className="font-cinzel text-xl font-bold tracking-[0.15em] text-white uppercase">
-                Continue Journey
-              </h2>
-              <div className="h-px w-10 bg-gothic-gold/40 mx-auto mt-2.5" />
-            </div>
+            <Text style={styles.formTitle}>Continue Journey</Text>
+            <View style={styles.titleDivider} />
 
-            {errorStatus && (
-              <div className="mb-5 p-3.5 rounded-lg border border-gothic-crimson/30 bg-gothic-crimson/10 text-gothic-gold font-mono text-[10px] uppercase tracking-wider flex items-center gap-2.5">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-gothic-crimson" />
-                <span>{errorStatus}</span>
-              </div>
-            )}
+            {errorStatus ? (
+              <View style={styles.errorBox}>
+                <AlertTriangle size={14} color={COLORS.gothicCrimson} />
+                <Text style={styles.errorText}>{errorStatus}</Text>
+              </View>
+            ) : null}
 
-            <form onSubmit={handleLoginSubmit} className="space-y-5">
-              <div>
-                <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-2">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                    <Mail className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                    placeholder="thy-email@domain.com"
-                    required
-                  />
-                </div>
-              </div>
+            {successMessage ? (
+              <View style={styles.successBox}>
+                <Text style={styles.successText}>{successMessage}</Text>
+              </View>
+            ) : null}
 
-              <div>
-                <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-2">
-                  Password
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                    <Lock className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                    placeholder="••••••••"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center text-[10px] font-mono tracking-wider pt-2">
-                <button
-                  type="button"
-                  onClick={() => handleModeChange('FORGOT_PASS')}
-                  className="text-gray-500 hover:text-white transition-colors cursor-pointer"
-                >
-                  Forgot Password?
-                </button>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-2.5 sm:py-3 mt-4 px-3 border border-gothic-gold font-cinzel text-[10px] sm:text-xs tracking-[0.08em] xs:tracking-[0.15em] text-black uppercase bg-gothic-gold hover:bg-gothic-gold/85 disabled:opacity-40 rounded-lg transition-colors cursor-pointer font-bold duration-200 flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(200,158,92,0.15)]"
-              >
-                {isLoading ? <RefreshCw className="w-4 h-4 animate-spin text-black" /> : <><LockKeyhole className="w-3.5 h-3.5 shrink-0" /> [ Enter ICARUS ]</>}
-              </button>
-            </form>
-
-            <div className="mt-8 pt-6 border-t border-gothic-border/40 text-center font-mono text-[10px] uppercase tracking-widest text-gray-500 flex justify-center items-center gap-1.5">
-              <span>New here?</span>
-              <button
-                onClick={() => handleModeChange('SIGNUP')}
-                className="text-gothic-gold hover:text-white font-bold transition-colors cursor-pointer"
-              >
-                Begin Journey
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* SCREEN 3: SIGNUP (Begin Journey) */}
-        {mode === 'SIGNUP' && (
-          <motion.div 
-            key="signup"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            className="w-full max-w-xl p-4 xs:p-6 sm:p-8 rounded-2xl border border-gothic-border bg-gothic-card/90 shadow-[0_0_40px_rgba(0,0,0,0.8)] relative z-10 mx-auto"
-          >
-            <button
-              onClick={() => handleModeChange('WELCOME')}
-              className="absolute top-6 left-6 text-gray-500 hover:text-gothic-gold transition-colors flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-widest cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Return
-            </button>
-
-            <div className="text-center mt-4 mb-6">
-              <h2 className="font-cinzel text-xl font-bold tracking-[0.15em] text-white uppercase">
-                Begin Your Journey
-              </h2>
-              <p className="font-mono text-[9.5px] uppercase text-gothic-gold mt-1.5 tracking-widest">
-                Create character records for thy eternal crusade
-              </p>
-              <div className="h-px w-10 bg-gothic-gold/40 mx-auto mt-2" />
-            </div>
-
-            {errorStatus && (
-              <div className="mb-5 p-3.5 rounded-lg border border-gothic-crimson/30 bg-gothic-crimson/10 text-gothic-gold font-mono text-[10px] uppercase tracking-wider flex items-center gap-2.5">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-gothic-crimson" />
-                <span>{errorStatus}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSignupSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Required Fields */}
-                <div className="space-y-3.5">
-                  <div className="font-cinzel text-[10px] font-bold text-gray-300 border-b border-gothic-border/30 pb-1 uppercase tracking-wider">
-                    🕯️ Identity Seals
-                  </div>
-                  
-                  <div>
-                    <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-1.5">
-                      Display Name *
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                        <User className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="text"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                        placeholder="e.g. Ojier"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-1.5">
-                      Email address *
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                        <Mail className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                        placeholder="pilgrim@domain.com"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-1.5">
-                      Password *
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                        <Lock className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                        placeholder="••••••••"
-                        required
-                        minLength={6}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-1.5">
-                      Confirm Password *
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                        <Lock className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                        placeholder="••••••••"
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Optional Customization */}
-                <div className="space-y-3.5">
-                  <div className="font-cinzel text-[10px] font-bold text-gray-300 border-b border-gothic-border/30 pb-1 uppercase tracking-wider">
-                    🏛️ Soul Customization
-                  </div>
-
-                  <div>
-                    <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-1.5 flex justify-between items-center">
-                      <span>Preferred Name</span>
-                      <span className="text-[7.5px] text-gray-500 font-bold">OPTIONAL</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                        <Award className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="text"
-                        value={preferredName}
-                        onChange={(e) => setPreferredName(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                        placeholder="e.g. The Wanderer"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-1.5 flex justify-between items-center">
-                      <span>Date of Birth</span>
-                      <span className="text-[7.5px] text-gray-500 font-bold">OPTIONAL</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                        <Calendar className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="date"
-                        value={dateOfBirth}
-                        onChange={(e) => setDateOfBirth(e.target.value)}
-                        className="w-full pl-10 pr-4 py-1.5 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-400 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-1.5">
-                      Timezone alignment
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                        <Clock className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="text"
-                        value={timezone}
-                        onChange={(e) => setTimezone(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-400 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                        placeholder="Detected timezone"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-black/25 p-3 text-[8px] font-mono text-gray-500 border border-gothic-border/30 uppercase leading-normal tracking-wide">
-                    † Standard details regarding address, telephone records, or gender classification are strictly omitted. They carry no weight under the progression of the soul.
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-2.5 sm:py-3.5 mt-5 px-3 border border-gothic-gold/70 font-cinzel text-[10px] sm:text-xs tracking-[0.05em] xs:tracking-[0.15em] text-black uppercase bg-gothic-gold hover:bg-gothic-gold/85 disabled:opacity-40 rounded-lg transition-colors cursor-pointer font-bold duration-200 flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(200,158,92,0.1)] hover:shadow-[0_4px_20px_rgba(200,158,92,0.2)]"
-              >
-                {isLoading ? <RefreshCw className="w-4 h-4 animate-spin text-black" /> : <>[ Bind & Register Character ]</>}
-              </button>
-            </form>
-
-            <div className="mt-8 pt-5 border-t border-gothic-border/40 text-center font-mono text-[10px] uppercase tracking-widest text-gray-500 flex justify-center items-center gap-1.5">
-              <span>Return to previous path?</span>
-              <button
-                onClick={() => handleModeChange('LOGIN')}
-                className="text-gothic-gold hover:text-white font-bold transition-colors cursor-pointer"
-              >
-                Log In
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* SCREEN 4: FORGOT PASSWORD */}
-        {mode === 'FORGOT_PASS' && (
-          <motion.div 
-            key="forgot-password"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            className="w-full max-w-md p-5 xs:p-7 sm:p-8 rounded-2xl border border-gothic-border bg-gothic-card/90 shadow-[0_0_40px_rgba(0,0,0,0.8)] relative z-10 mx-auto"
-          >
-            <button
-              onClick={() => handleModeChange('LOGIN')}
-              className="absolute top-6 left-6 text-gray-500 hover:text-gothic-gold transition-colors flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-widest cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Cancel
-            </button>
-
-            <div className="text-center mt-4 mb-6">
-              <h2 className="font-cinzel text-lg font-bold tracking-[0.15em] text-white uppercase">
-                Temporal Reset
-              </h2>
-              <div className="h-px w-10 bg-gothic-gold/40 mx-auto mt-2.5" />
-            </div>
-
-            {errorStatus && (
-              <div className="mb-5 p-3.5 rounded-lg border border-gothic-crimson/30 bg-gothic-crimson/10 text-gothic-gold font-mono text-[10px] uppercase tracking-wider flex items-center gap-2.5">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-gothic-crimson" />
-                <span>{errorStatus}</span>
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="mb-5 p-3.5 rounded-lg border border-emerald-900/30 bg-emerald-950/10 text-emerald-400 font-mono text-[10px] uppercase tracking-wider flex items-center gap-2.5">
-                <span>✔ {successMessage}</span>
-              </div>
-            )}
-
-            <form onSubmit={handlePasswordReset} className="space-y-4">
-              <div className="p-3 bg-black/35 rounded-lg text-[9px] font-mono text-gray-500 border border-gothic-border/30 uppercase leading-relaxed mb-4">
-                🕯️ To align password seals on sandbox trials, verify thy registered email and enter a new password. The timezone temporal alignment parameter will guarantee verification.
-              </div>
-
-              <div>
-                <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-1.5">
-                  Registered Email *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                    <Mail className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                    placeholder="thy-email@domain.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-1.5">
-                  Confirm Timezone alignment *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                    <Clock className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="text"
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                    placeholder="Detected TZ"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-mono text-[9px] uppercase tracking-widest text-gothic-gold mb-1.5">
-                  New Password Signature *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                    <Lock className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                    placeholder="New Password"
-                    required
-                    minLength={6}
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-2.5 sm:py-3 mt-4 px-3 border border-gothic-gold font-cinzel text-[10px] sm:text-xs tracking-[0.05em] xs:tracking-[0.15em] text-black uppercase bg-gothic-gold hover:bg-gothic-gold/85 disabled:opacity-40 rounded-lg transition-colors cursor-pointer font-bold duration-200 flex items-center justify-center gap-2"
-              >
-                {isLoading ? <RefreshCw className="w-4 h-4 animate-spin text-black" /> : <>[ Realist Password Reset ]</>}
-              </button>
-            </form>
-          </motion.div>
-        )}
-
-        {/* SCREEN 5: GENERATING CHARACTER LOADING */}
-        {mode === 'GENERATING_CHAR' && (
-          <motion.div 
-            key="generating-character"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="w-full max-w-md p-5 xs:p-8 sm:p-10 rounded-2xl border border-gothic-gold bg-gothic-card/95 shadow-[0_0_50px_rgba(200,158,92,0.1)] text-center relative z-10 mx-auto"
-          >
-            {/* Immersive glowing spinner */}
-            <div className="w-24 h-24 mx-auto mb-10 relative">
-              <div className="absolute inset-0 rounded-full border-4 border-gothic-border border-t-gothic-gold animate-spin" />
-              <div className="absolute inset-2.5 rounded-full border border-gothic-gold/20 animate-pulse flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-gothic-gold" />
-              </div>
-            </div>
-
-            <h3 className="font-cinzel text-base sm:text-lg font-bold text-white uppercase tracking-[0.15em] sm:tracking-[0.2em] mb-2 animate-pulse">
-              Fusing Spiritual Records
-            </h3>
-            <p className="font-mono text-[9px] text-gray-500 uppercase tracking-widest mb-10">
-              The altar of vows inscribe a new pilgrim signature
-            </p>
-
-            <div className="space-y-3.5 max-w-xs mx-auto text-left font-mono text-[10px] uppercase tracking-wider text-gray-300">
-              {charGenSteps.map((step, idx) => {
-                const isActive = charGenStep === idx;
-                const isCheck = charGenStep > idx;
-
-                return (
-                  <div 
-                    key={idx}
-                    className={`flex items-center gap-2.5 transition-opacity duration-300 ${isCheck ? 'text-gothic-gold font-bold' : isActive ? 'text-white' : 'opacity-25'}`}
-                  >
-                    <span>
-                      {isCheck ? "✔" : isActive ? "★" : "○"}
-                    </span>
-                    <span>
-                      {step}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-
-        {/* SCREEN 6: WHAT DO YOU WISH TO BECOME (First Campaign Question) */}
-        {mode === 'FIRST_ONBOARDING' && (
-          <motion.div 
-            key="first-onboarding"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            className="w-full max-w-xl p-5 xs:p-7 sm:p-8 rounded-2xl border border-gothic-border bg-gothic-card/90 shadow-[0_0_40px_rgba(0,0,0,0.8)] relative z-10 mx-auto"
-          >
-            <div className="text-center mt-3 mb-6 sm:mb-8">
-              <span className="font-cinzel text-gothic-gold text-[8px] sm:text-[9px] font-bold tracking-[0.2em] sm:tracking-[0.3em] block mb-2 uppercase">
-                🕯️ Level 1 Ascendant • Character Configured 🕯️
-              </span>
-              <h2 className="font-cinzel text-xl xs:text-2xl sm:text-3xl font-black text-white uppercase tracking-[0.05em] sm:tracking-[0.1em] leading-snug">
-                What Do You Wish To Become?
-              </h2>
-              <p className="font-mono text-[9px] uppercase text-gray-500 mt-1.5 tracking-wider">
-                State thy primary aspiration to instigate thy first grand campaign path
-              </p>
-              <div className="h-px w-10 bg-gothic-gold/40 mx-auto mt-2.5" />
-            </div>
-
-            {errorStatus && (
-              <div className="mb-5 p-3.5 rounded-lg border border-gothic-crimson/30 bg-gothic-crimson/10 text-gothic-gold font-mono text-[10px] uppercase tracking-wider flex items-center gap-2.5">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-gothic-crimson animate-pulse" />
-                <span>{errorStatus}</span>
-              </div>
-            )}
-
-            {/* Presets Grid */}
-            <div className="mb-6 space-y-2">
-              <label className="block font-mono text-[9.5px] uppercase tracking-widest text-gothic-gold mb-2.5 selection:bg-transparent">
-                Acquire Ancient Pre-designed Covenants:
-              </label>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {presetAspirations.map((p, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      soundEngine.playClick();
-                      setFirstAspiration(p.title);
-                    }}
-                    className={`p-2.5 sm:p-3 rounded-lg border text-left cursor-pointer transition-all whitespace-normal break-words ${
-                      firstAspiration.toLowerCase().includes(p.title.toLowerCase())
-                        ? 'border-gothic-gold bg-gothic-gold/10 text-gothic-gold font-bold shadow-[0_0_10px_rgba(200,158,92,0.1)]'
-                        : 'border-gothic-border/50 bg-black/20 hover:border-gothic-gold/40 text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    <div className="font-cinzel text-[10px] uppercase tracking-wider font-bold mb-0.5">
-                      {p.title}
-                    </div>
-                    <div className="font-mono text-[8.5px] sm:text-[8px] text-gray-500 italic uppercase">
-                      † {p.rpg}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Manual Textbox */}
-            <div className="space-y-4">
-              <div>
-                <label className="block font-mono text-[9.5px] uppercase tracking-widest text-gothic-gold mb-2">
-                  Or Forge Thy Custom Soul Aspiration:
-                </label>
-                <input
-                  type="text"
-                  value={firstAspiration}
-                  onChange={(e) => setFirstAspiration(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg border border-gothic-border/60 bg-black/40 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gothic-gold transition-colors font-sans"
-                  placeholder="e.g. Master piano, learn ancient Rust coding, complete raw calisthenics..."
-                  required
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>EMAIL ADDRESS</Text>
+              <View style={styles.inputWrapper}>
+                <Mail size={14} color={COLORS.gray500} style={styles.inputIcon} />
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  style={styles.textInput}
+                  placeholder="thy-email@domain.com"
+                  placeholderTextColor={COLORS.gray700}
                 />
-              </div>
+              </View>
+            </View>
 
-              <button
-                onClick={handleCreateOnboardCampaign}
-                disabled={isLoading || !firstAspiration.trim()}
-                className="w-full py-2.5 sm:py-3.5 px-3 border border-gothic-gold font-cinzel text-[10px] sm:text-xs tracking-[0.08em] xs:tracking-[0.15em] text-black uppercase bg-gothic-gold hover:bg-gothic-gold/85 disabled:opacity-30 rounded-lg transition-colors font-semibold sm:font-bold duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-[0_4px_15px_rgba(200,158,92,0.15)]"
-              >
-                {isLoading ? <RefreshCw className="w-4 h-4 animate-spin text-black shrink-0" /> : <>[ Plan & Generate Campaign ]</>}
-              </button>
-            </div>
-          </motion.div>
-        )}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>PASSWORD</Text>
+              <View style={styles.inputWrapper}>
+                <Lock size={14} color={COLORS.gray500} style={styles.inputIcon} />
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  style={styles.textInput}
+                  placeholder="••••••••"
+                  placeholderTextColor={COLORS.gray700}
+                />
+              </View>
+            </View>
 
-        {/* SCREEN 7: FIRST CAMPAIGN PREVIEW & SUBMIT */}
-        {mode === 'CONFIRM_ONBOARDING' && plannedCampaign && (
-          <motion.div 
-            key="confirm-onboarding"
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            className="w-full max-w-xl p-4 xs:p-6 sm:p-8 rounded-2xl border border-gothic-gold bg-gothic-card/90 shadow-[0_0_50px_rgba(0,0,0,0.85)] relative z-10 mx-auto"
-          >
-            <div className="text-center mt-3 mb-5 sm:mb-6">
-              <span className="font-cinzel text-gothic-gold text-[8px] sm:text-[9px] font-bold tracking-[0.2em] sm:tracking-[0.3em] block mb-2 uppercase">
-                ★ Campaign Formulated ★
-              </span>
-              <h2 className="font-cinzel text-base xs:text-lg sm:text-2xl font-black text-white uppercase tracking-wider leading-snug">
-                {plannedCampaign.name}
-              </h2>
-              <p className="font-mono text-[8.5px] uppercase text-gothic-gold/80 mt-1.5 tracking-wider italic">
-                "{plannedCampaign.difficulty || 'Solemn Curriculum Study Code'}"
-              </p>
-              <div className="h-px w-10 bg-gothic-gold/40 mx-auto mt-2.5" />
-            </div>
+            <TouchableOpacity style={styles.forgotBtn} onPress={() => handleModeChange('FORGOT_PASS')}>
+              <Text style={styles.forgotText}>Forgot Password signature?</Text>
+            </TouchableOpacity>
 
-            <div className="mb-6 space-y-3 p-4 rounded-xl bg-black/40 border border-gothic-border/50 max-h-60 overflow-y-auto custom-scrollbar text-left">
-              <div className="font-cinzel text-[10px] font-bold text-gray-300 uppercase tracking-widest border-b border-gothic-border/30 pb-1.5 mb-2.5 flex items-center gap-2">
-                <Award className="w-4 h-4 text-gothic-gold" />
-                Covenant Phases Outline (5 Stages)
-              </div>
-
-              {plannedCampaign.stages && plannedCampaign.stages.map((stage, idx) => (
-                <div key={idx} className="space-y-1 py-1.5 border-b border-gothic-border/10 last:border-0">
-                  <div className="font-cinzel text-[9.5px] font-bold text-gothic-gold uppercase tracking-wider flex justify-between">
-                    <span>{stage.name || `Phase ${idx + 1}`}</span>
-                    <span className="font-mono text-[8px] text-gray-500">Tier {idx + 1}</span>
-                  </div>
-                  <div className="pl-3.5 space-y-1">
-                    {stage.tasks?.map((task, tidx) => (
-                      <div key={tidx} className="font-mono text-[8.5px] text-gray-400 uppercase tracking-wider">
-                        • {task.title}
-                        <span className="block font-sans text-[8px] text-gray-600 normal-case ml-2.5 line-clamp-1 italic">
-                          {task.description}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="rounded-lg bg-black/30 p-3 text-[8.5px] font-mono text-gray-500 border border-gothic-border/30 uppercase leading-relaxed text-center mb-6">
-              † Taking this first campaign generates thy immediate progression milestone calendar. Complete these vows daily to bolster attributes.
-            </div>
-
-            <button
-              onClick={handleFinalAccess}
-              className="w-full py-3 sm:py-4 px-3 border border-gothic-gold font-cinzel text-[10px] sm:text-xs tracking-[0.1em] xs:tracking-[0.2em] sm:tracking-[0.25em] text-black uppercase bg-gothic-gold hover:bg-gothic-gold/85 rounded-lg font-bold transition-all duration-300 shadow-[0_0_20px_rgba(200,158,92,0.2)] hover:scale-[1.01] cursor-pointer flex items-center justify-center gap-2"
+            <TouchableOpacity 
+              style={[styles.btnPrimarySubmit, isLoading && { opacity: 0.5 }]} 
+              onPress={handleLoginSubmit}
+              disabled={isLoading}
             >
-              <ArrowRight className="w-4 h-4 shrink-0" /> [ Enter The Path ]
-            </button>
-          </motion.div>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <View style={styles.submitBtnContent}>
+                  <LockKeyhole size={14} color="#000" />
+                  <Text style={styles.btnSubmitText}>ENTER ICARUS</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.switchModeBox}>
+              <Text style={styles.switchModeDesc}>New here? </Text>
+              <TouchableOpacity onPress={() => handleModeChange('SIGNUP')}>
+                <Text style={styles.switchModeLink}>Begin Journey</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
 
-      </AnimatePresence>
-    </div>
+        {/* Mode: FORGOT PASSWORD */}
+        {mode === 'FORGOT_PASS' && (
+          <View style={styles.formCard}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => handleModeChange('LOGIN')}>
+              <ArrowLeft size={12} color={COLORS.gray500} />
+              <Text style={styles.backBtnText}>BACK</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.formTitle}>Realign Password</Text>
+            <View style={styles.titleDivider} />
+
+            {errorStatus ? (
+              <View style={styles.errorBox}>
+                <AlertTriangle size={14} color={COLORS.gothicCrimson} />
+                <Text style={styles.errorText}>{errorStatus}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>EMAIL ADDRESS</Text>
+              <View style={styles.inputWrapper}>
+                <Mail size={14} color={COLORS.gray500} style={styles.inputIcon} />
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  style={styles.textInput}
+                  placeholder="thy-email@domain.com"
+                  placeholderTextColor={COLORS.gray700}
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.btnPrimarySubmit, isLoading && { opacity: 0.5 }]} 
+              onPress={handlePasswordResetSubmit}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <Text style={styles.btnSubmitText}>SEND RESET SCROLL</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Mode: SIGNUP */}
+        {mode === 'SIGNUP' && (
+          <View style={[styles.formCard, { maxWidth: 500 }]}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => handleModeChange('WELCOME')}>
+              <ArrowLeft size={12} color={COLORS.gray500} />
+              <Text style={styles.backBtnText}>RETURN</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.formTitle}>Begin Your Journey</Text>
+            <Text style={styles.formSubtitle}>Create character records for thy eternal crusade</Text>
+            <View style={styles.titleDivider} />
+
+            {errorStatus ? (
+              <View style={styles.errorBox}>
+                <AlertTriangle size={14} color={COLORS.gothicCrimson} />
+                <Text style={styles.errorText}>{errorStatus}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>DISPLAY NAME *</Text>
+              <View style={styles.inputWrapper}>
+                <User size={14} color={COLORS.gray500} style={styles.inputIcon} />
+                <TextInput
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  style={styles.textInput}
+                  placeholder="e.g. Ojier"
+                  placeholderTextColor={COLORS.gray700}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>EMAIL ADDRESS *</Text>
+              <View style={styles.inputWrapper}>
+                <Mail size={14} color={COLORS.gray500} style={styles.inputIcon} />
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  style={styles.textInput}
+                  placeholder="thy-email@domain.com"
+                  placeholderTextColor={COLORS.gray700}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>PASSWORD *</Text>
+              <View style={styles.inputWrapper}>
+                <Lock size={14} color={COLORS.gray500} style={styles.inputIcon} />
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  style={styles.textInput}
+                  placeholder="••••••••"
+                  placeholderTextColor={COLORS.gray700}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>CONFIRM PASSWORD *</Text>
+              <View style={styles.inputWrapper}>
+                <Lock size={14} color={COLORS.gray500} style={styles.inputIcon} />
+                <TextInput
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  style={styles.textInput}
+                  placeholder="••••••••"
+                  placeholderTextColor={COLORS.gray700}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>PREFERRED NAME / TITLE PREFIX</Text>
+              <View style={styles.inputWrapper}>
+                <Award size={14} color={COLORS.gray500} style={styles.inputIcon} />
+                <TextInput
+                  value={preferredName}
+                  onChangeText={setPreferredName}
+                  style={styles.textInput}
+                  placeholder="e.g. Ashen Zealot"
+                  placeholderTextColor={COLORS.gray700}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>DATE OF BIRTH (YYYY-MM-DD)</Text>
+              <View style={styles.inputWrapper}>
+                <Calendar size={14} color={COLORS.gray500} style={styles.inputIcon} />
+                <TextInput
+                  value={dateOfBirth}
+                  onChangeText={setDateOfBirth}
+                  style={styles.textInput}
+                  placeholder="e.g. 1998-05-15"
+                  placeholderTextColor={COLORS.gray700}
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.btnPrimarySubmit, isLoading && { opacity: 0.5 }]} 
+              onPress={handleSignupSubmit}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <Text style={styles.btnSubmitText}>SIGN INSCRIBE RECORDS</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.switchModeBox}>
+              <Text style={styles.switchModeDesc}>Already registered? </Text>
+              <TouchableOpacity onPress={() => handleModeChange('LOGIN')}>
+                <Text style={styles.switchModeLink}>Continue Journey</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Mode: GENERATING CHARACTER */}
+        {mode === 'GENERATING_CHAR' && (
+          <View style={styles.welcomeBox}>
+            <ActivityIndicator size="large" color={COLORS.gothicGold} style={{ marginBottom: 20 }} />
+            <Text style={styles.mainTitle}>GENERATING RECREATION</Text>
+            <View style={styles.titleDivider} />
+            <View style={styles.checklistCard}>
+              {charGenSteps.map((step, idx) => (
+                <View key={idx} style={styles.checkStepRow}>
+                  <Text style={[
+                    styles.checkStepDot, 
+                    { color: idx < charGenStep ? COLORS.gothicGold : (idx === charGenStep ? '#fff' : COLORS.gray700) }
+                  ]}>
+                    {idx < charGenStep ? '✦' : (idx === charGenStep ? '🕯️' : '⚓')}
+                  </Text>
+                  <Text style={[
+                    styles.checkStepText,
+                    { color: idx < charGenStep ? COLORS.gray300 : (idx === charGenStep ? '#fff' : COLORS.gray600) }
+                  ]}>
+                    {step}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Mode: FIRST_ONBOARDING (Choose thy primary Aspiration) */}
+        {mode === 'FIRST_ONBOARDING' && (
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>State Thy Primary Crusade</Text>
+            <Text style={styles.formSubtitle}>AI will devise thy initial 40-Day campaign</Text>
+            <View style={styles.titleDivider} />
+
+            {errorStatus ? (
+              <View style={styles.errorBox}>
+                <AlertTriangle size={14} color={COLORS.gothicCrimson} style={{ marginRight: 6 }} />
+                <Text style={styles.errorText}>{errorStatus}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>ENTER THY ASPIRATION (E.G. LEARN REACT, DO PUSHUPS, READ BOOKS)</Text>
+              <TextInput
+                value={firstAspiration}
+                onChangeText={setFirstAspiration}
+                style={styles.onboardInput}
+                placeholder="State thy covenant target..."
+                placeholderTextColor={COLORS.gray700}
+              />
+            </View>
+
+            <Text style={styles.presetsHeader}>OR HARKEN ON PRESET CONVENANTS:</Text>
+            <View style={styles.presetsGrid}>
+              {presetAspirations.map((item, idx) => (
+                <TouchableOpacity 
+                  key={idx}
+                  style={styles.presetItem}
+                  onPress={() => setFirstAspiration(item.title)}
+                >
+                  <Text style={styles.presetTitle}>{item.title}</Text>
+                  <Text style={styles.presetSubtitle}>{item.rpg}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.btnPrimarySubmit, { marginTop: 15 }, isLoading && { opacity: 0.5 }]} 
+              onPress={handleCreateOnboardCampaign}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <View style={styles.submitBtnContent}>
+                  <Sparkles size={14} color="#000" />
+                  <Text style={styles.btnSubmitText}>PLAN CRUSADE ROADMAP</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Mode: CONFIRM_ONBOARDING */}
+        {mode === 'CONFIRM_ONBOARDING' && plannedCampaign && (
+          <View style={[styles.formCard, { maxWidth: 550 }]}>
+            <Text style={styles.formTitle}>Crusade Roadmap Bestowed</Text>
+            <Text style={[styles.onboardCampaignTitle, { color: COLORS.gothicGold }]}>{plannedCampaign.title}</Text>
+            <Text style={styles.formSubtitle}>{plannedCampaign.timelineExplanation}</Text>
+            <View style={styles.titleDivider} />
+
+            <Text style={styles.presetsHeader}>CRUSADE PHASES PREVIEW:</Text>
+            <ScrollView style={styles.campaignPreviewScroll}>
+              {plannedCampaign.stages && plannedCampaign.stages.map((stage: any, sIdx: number) => (
+                <View key={sIdx} style={styles.stagePreviewCard}>
+                  <Text style={styles.stagePreviewName}>{stage.name}</Text>
+                  <Text style={styles.stagePreviewLore}>{stage.lore}</Text>
+                  {stage.tasks && stage.tasks.map((task: any, tIdx: number) => (
+                    <View key={tIdx} style={styles.taskPreviewRow}>
+                      <Text style={styles.taskPreviewBullet}>•</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.taskPreviewTitle}>{task.title}</Text>
+                        <Text style={styles.taskPreviewDesc}>{task.description}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={[styles.btnPrimarySubmit, { marginTop: 15 }]} 
+              onPress={handleFinalAccess}
+            >
+              <View style={styles.submitBtnContent}>
+                <ArrowRight size={14} color="#000" />
+                <Text style={styles.btnSubmitText}>COMMENCE SACRED CRUSADE</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
+
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
+
+const styles = StyleSheet.create({
+  keyboardContainer: {
+    flex: 1,
+    backgroundColor: COLORS.gothicBack,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  welcomeBox: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: COLORS.gothicCard,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.6)',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  sigilBox: {
+    width: 96,
+    height: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  outerGlowCircle: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 48,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.2)',
+  },
+  dashedOuterBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 48,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(200, 158, 92, 0.4)',
+  },
+  secondOrbitContainer: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondOrbitCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.25)',
+  },
+  secondOrbitBead: {
+    position: 'absolute',
+    top: -3,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.gothicGold,
+  },
+  quadrantRing: {
+    position: 'absolute',
+    width: 68,
+    height: 68,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+    borderRadius: 17,
+    opacity: 0.7,
+  },
+  raysOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.3,
+  },
+  rayLine: {
+    position: 'absolute',
+    left: 47,
+    top: 0,
+    width: 2,
+    height: 96,
+    backgroundColor: 'rgba(200, 158, 92, 0.4)',
+  },
+  coreSigil: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.5)',
+    backgroundColor: COLORS.gothicCard,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mainTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 28,
+    fontWeight: '900',
+    color: COLORS.gothicGold,
+    letterSpacing: 4,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  subTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    color: COLORS.gray400,
+    letterSpacing: 2,
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  btnPrimary: {
+    width: '100%',
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.5)',
+    borderRadius: 8,
+    backgroundColor: 'rgba(200, 158, 92, 0.05)',
+    alignItems: 'center',
+  },
+  btnPrimaryText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: 'bold',
+    letterSpacing: 1.5,
+  },
+  btnSecondary: {
+    width: '100%',
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  btnSecondaryText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11,
+    color: COLORS.gray400,
+    letterSpacing: 1.5,
+  },
+  formCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: COLORS.gothicCard,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.8,
+    shadowRadius: 15,
+    elevation: 8,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 4,
+  },
+  backBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    color: COLORS.gray500,
+    letterSpacing: 1,
+  },
+  formTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    letterSpacing: 1.5,
+    textAlign: 'center',
+  },
+  formSubtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicGold,
+    textAlign: 'center',
+    marginTop: 4,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  titleDivider: {
+    height: 1,
+    backgroundColor: 'rgba(200, 158, 92, 0.3)',
+    width: 40,
+    alignSelf: 'center',
+    marginVertical: 12,
+  },
+  errorBox: {
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(164, 44, 56, 0.3)',
+    backgroundColor: 'rgba(164, 44, 56, 0.1)',
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  errorText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  successBox: {
+    padding: 10,
+    backgroundColor: 'rgba(74, 222, 128, 0.1)',
+    borderColor: 'rgba(74, 222, 128, 0.3)',
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  successText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    color: '#4ade80',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  inputGroup: {
+    marginBottom: 14,
+  },
+  inputLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicGold,
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  textInput: {
+    flex: 1,
+    height: 40,
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: FONTS.sans,
+  },
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: 10,
+  },
+  forgotText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+    letterSpacing: 0.5,
+  },
+  btnPrimarySubmit: {
+    width: '100%',
+    paddingVertical: 12,
+    backgroundColor: COLORS.gothicGold,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  btnSubmitText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11,
+    color: '#000',
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  switchModeBox: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 18,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(46, 50, 62, 0.4)',
+  },
+  switchModeDesc: {
+    fontFamily: FONTS.mono,
+    fontSize: 9.5,
+    color: COLORS.gray500,
+  },
+  switchModeLink: {
+    fontFamily: FONTS.mono,
+    fontSize: 9.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  checklistCard: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  checkStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 6,
+    gap: 10,
+  },
+  checkStepDot: {
+    fontSize: 14,
+  },
+  checkStepText: {
+    fontFamily: FONTS.mono,
+    fontSize: 10.5,
+    letterSpacing: 0.5,
+  },
+  onboardInput: {
+    width: '100%',
+    height: 44,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: FONTS.sans,
+  },
+  presetsHeader: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+    letterSpacing: 1,
+    marginTop: 12,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  presetsGrid: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  presetItem: {
+    width: '100%',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    backgroundColor: COLORS.gothicDark,
+  },
+  presetTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  presetSubtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray500,
+    marginTop: 2,
+    textTransform: 'uppercase',
+  },
+  onboardCampaignTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 6,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  campaignPreviewScroll: {
+    maxHeight: 220,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    padding: 10,
+    marginVertical: 10,
+  },
+  stagePreviewCard: {
+    marginBottom: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.2)',
+  },
+  stagePreviewName: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  stagePreviewLore: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+    fontStyle: 'italic',
+    marginVertical: 4,
+    textTransform: 'uppercase',
+  },
+  taskPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginVertical: 3,
+  },
+  taskPreviewBullet: {
+    color: COLORS.gothicGold,
+    fontSize: 10,
+  },
+  taskPreviewTitle: {
+    fontFamily: FONTS.sans,
+    fontSize: 10,
+    color: COLORS.gray300,
+    fontWeight: 'bold',
+  },
+  taskPreviewDesc: {
+    fontFamily: FONTS.sans,
+    fontSize: 9,
+    color: COLORS.gray500,
+  }
+});
+export default IcarusAuthPortal;

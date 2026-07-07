@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  ScrollView, 
+  ActivityIndicator, 
+  StyleSheet, 
+  Alert,
+  Dimensions,
+  Platform
+} from 'react-native';
 import { 
   Sparkles, 
   BookOpen, 
@@ -14,11 +25,13 @@ import {
   Trophy,
   ArrowRight,
   Lock
-} from 'lucide-react';
+} from 'lucide-react-native';
 import { Quest, Goal, QuestDifficulty, QuestCategory } from '../types';
 import { ProceduralEmblem } from './ProceduralEmblem';
 import { soundEngine } from '../utils/audio';
 import { getLocalDateString, getTodayLocalDateString } from '../utils/dateUtils';
+import { generateGoalPlan, getApiKey } from '../utils/aiEngine';
+import { COLORS, FONTS } from '../theme';
 
 interface CampaignsTabProps {
   quests: Quest[];
@@ -53,36 +66,23 @@ export function CampaignsTab({
   onUpdateGoals,
   onAbandonCampaign
 }: CampaignsTabProps) {
-  // Mini Tabs state: active vs create
   const [miniTab, setMiniTab] = useState<'active' | 'create'>('active');
-
-  // Popup modal visibility state
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-
-  // Track expanded task IDs for the current objectives view to show details
   const [expandedTaskIds, setExpandedTaskIds] = useState<Record<string, boolean>>({});
-
-  // Input states inside the Create mini tab
+  
   const [quickTaskTitle, setQuickTaskTitle] = useState('');
   const [aspirationInput, setAspirationInput] = useState('');
   
-  // Loading and feedback states
   const [isPlanningLoading, setIsPlanningLoading] = useState(false);
   const [planError, setPlanError] = useState('');
   const [startDateStr, setStartDateStr] = useState<string>(() => getTodayLocalDateString());
-
-  // Active campaign selection state
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
-
-  // Stage index preview override state, so users can select any stage (even locked ones)
   const [previewStageIndex, setPreviewStageIndex] = useState<number | null>(null);
 
-  // Reset preview staging index when selecting another campaign or opening details
   useEffect(() => {
     setPreviewStageIndex(null);
   }, [selectedGoalId, isDetailModalOpen]);
 
-  // Auto-switch tab to 'create' when there are no active campaigns, otherwise default 'active'
   useEffect(() => {
     if (goals.length === 0) {
       setMiniTab('create');
@@ -92,10 +92,8 @@ export function CampaignsTab({
     }
   }, [goals, selectedGoalId]);
 
-  // Handle selected campaign
   const activeCampaign = goals.find(g => g.id === selectedGoalId) || (goals.length > 0 ? goals[0] : null);
 
-  // Calculate completion metric helper
   const calculateCampaignProgress = (goal: Goal) => {
     let totalTasks = 0;
     let completedTasks = 0;
@@ -121,7 +119,6 @@ export function CampaignsTab({
     };
   };
 
-  // Determine the current phase / active stage
   const getPhaseAndWeek = (goal: Goal) => {
     let currentStageIndex = 0;
     let foundActive = false;
@@ -152,40 +149,42 @@ export function CampaignsTab({
     };
   };
 
-  // Get days remaining from campaign creation time
   const getDaysRemaining = (goal: Goal) => {
     const created = new Date(goal.createdAt);
     const now = new Date();
     const diffTime = now.getTime() - created.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    const totalDuration = 30; // Standard 30 days cycle
+    const totalDuration = 30;
     const remaining = totalDuration - diffDays;
     return Math.max(0, remaining);
   };
 
-  // Generate localized gothic-like advisor words
   const generateDynamicAdvisorText = (goal: Goal) => {
     const progress = calculateCampaignProgress(goal);
     const pct = progress.percentage;
     if (pct === 0) {
-      return `Thy pilgrimage of "${goal.title}" has been freshly inscribed inside the sacred Ledger of Duty. Settle thy resolve, carve thy dates onto the agenda files, and execute the starting vows to generate initial momentum.`;
+      return `Thy pilgrimage of "${goal.title}" has been freshly inscribed inside the sacred Ledger. Settle thy resolve, carve thy dates, and execute the starting vows to generate momentum.`;
     } else if (pct < 35) {
-      return `Thy campaign of "${goal.title}" is progressing firmly at ${pct}% completion. Foundations are taking root but remain vulnerable to slackened resolve. Be vigilant, execute thy daily penance, and push through initial friction.`;
+      return `Thy campaign of "${goal.title}" is progressing firmly at ${pct}% completion. Foundations are taking root but remain vulnerable to slackened resolve. Execute thy daily penance.`;
     } else if (pct < 75) {
-      return `With ${pct}% complete, the rhythm of thy "${goal.title}" crusade has begun modifying thy spirit. Practice of these trials is transforming into clean execution. Ensure thy commitment remains unbreakable under high hours of pressure.`;
+      return `With ${pct}% complete, the rhythm of thy "${goal.title}" crusade has begun modifying thy spirit. Transform trials into clean execution. Commit under pressure.`;
     } else if (pct < 100) {
-      return `Glorious triumph is within grasp! At ${pct}% complete, thy final evolution of the "${goal.title}" blueprint is settling. Walk forward with steadfast determination in this final stretch; do not allow distractions to extinguish thy embers.`;
+      return `Glorious triumph is within grasp! At ${pct}% complete, thy final evolution of the "${goal.title}" blueprint is settling. Walk forward with steadfast determination.`;
     } else {
-      return `† Sacred Covenant Complete! Thy "${goal.title}" has undergone the ultimate forge alchemy. High attributes are unlocked on thy character ledger. Inscribe thy next major crusade when thy soul is prepared.`;
+      return `† Sacred Covenant Complete! Thy "${goal.title}" has undergone the ultimate forge alchemy. High attributes are unlocked on thy character ledger.`;
     }
   };
 
-  // Submission handler for Campaign Generator
-  const handleCreateCampaignSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateCampaignSubmit = async () => {
     const aspiration = aspirationInput.trim();
     if (!aspiration) {
       setPlanError('Please declare what thou wish to become.');
+      return;
+    }
+
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      setPlanError('AI is unavailable. Please come back later.');
       return;
     }
 
@@ -194,18 +193,12 @@ export function CampaignsTab({
     setPlanError('');
 
     try {
-      const res = await fetch('/api/ai/plan-goal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ aspiration })
-      });
-
-      if (!res.ok) {
-        throw new Error('Ethereal sages failed to compile the roadmap.');
+      const rawPlan = await generateGoalPlan(aspiration);
+      
+      if (!rawPlan || (rawPlan as any).error) {
+        throw new Error('AI is unavailable. Please come back later.');
       }
 
-      const rawPlan = await res.json();
-      
       const newGoal: Goal = {
         id: `goal-${Date.now()}`,
         title: rawPlan.title || aspiration,
@@ -237,77 +230,13 @@ export function CampaignsTab({
       soundEngine.playSoulsClaimed();
 
     } catch (err: any) {
-      console.error(err);
       setPlanError('AI is unavailable. Please come back later.');
     } finally {
       setIsPlanningLoading(false);
     }
   };
 
-  // High quality offline fallback campaign generator
-  const getOfflineFallbackCampaign = (aspiration: string): Goal => {
-    return {
-      id: `goal-${Date.now()}`,
-      title: aspiration,
-      aspiration: aspiration,
-      categoryName: 'Sacred Covenant',
-      timelineExplanation: `An immersive, structured, five-stage gothic curriculum roadmap detailing thy path to: ${aspiration}.`,
-      resources: ['Scroll of Constant Devotion', 'Ledger of Sovereign Execution'],
-      stages: [
-        {
-          name: 'Phase 1 — Foundation',
-          lore: 'Establish basic, unwavering routines. Build initial friction thresholds.',
-          tasks: [
-            { id: `fb1-${Date.now()}`, title: `Inscribe basic rituals for ${aspiration}`, description: 'Familiarize thyself with simple daily elements.', difficulty: 'Lesser Burden', category: 'General', dayOffset: 1 },
-            { id: `fb2-${Date.now()}`, title: 'Review structural roadblocks', description: 'Eliminate negative triggers and clear thy calendar.', difficulty: 'Lesser Burden', category: 'General', dayOffset: 3 },
-            { id: `fb3-${Date.now()}`, title: 'The first major study block', description: 'Maintain complete focus for an extended period.', difficulty: 'Sinuous Vow', category: 'General', dayOffset: 6 }
-          ]
-        },
-        {
-          name: 'Phase 2 — Development',
-          lore: 'Formulate structural rhythm as routines solidify into heavy steel habits.',
-          tasks: [
-            { id: `fb4-${Date.now()}`, title: `Execute intermediate trials for ${aspiration}`, description: 'Increase frequency and depth of thy daily devotions.', difficulty: 'Sinuous Vow', category: 'General', dayOffset: 8 },
-            { id: `fb5-${Date.now()}`, title: 'Discipline durability test', description: 'Overcome immediate fatigue and deliver quality.', difficulty: 'Sinuous Vow', category: 'General', dayOffset: 11 },
-            { id: `fb6-${Date.now()}`, title: 'Extended twilight focus', description: 'Engage in highly demanding practices.', difficulty: 'Mortal Penance', category: 'General', dayOffset: 14 }
-          ]
-        },
-        {
-          name: 'Phase 3 — Application',
-          lore: 'Unleash thy growing power under real-world practical stress.',
-          tasks: [
-            { id: `fb7-${Date.now()}`, title: `A practical draft project of ${aspiration}`, description: 'Create a localized proof of thy learning.', difficulty: 'Sinuous Vow', category: 'General', dayOffset: 15 },
-            { id: `fb8-${Date.now()}`, title: 'Optimize velocity bounds', description: 'Tear down internal limits, practice at faster speed.', difficulty: 'Lesser Burden', category: 'General', dayOffset: 18 },
-            { id: `fb9-${Date.now()}`, title: 'Immersion of sweat and ink', description: 'Lock in for a heavy 2-hour distraction-free block.', difficulty: 'Mortal Penance', category: 'General', dayOffset: 21 }
-          ]
-        },
-        {
-          name: 'Phase 4 — Mastery',
-          lore: 'Refinement enters. The craft is executed with grace, precision, and authority.',
-          tasks: [
-            { id: `fb10-${Date.now()}`, title: 'Advanced methodologies exploration', description: 'Investigate elite frameworks of execution.', difficulty: 'Mortal Penance', category: 'General', dayOffset: 22 },
-            { id: `fb11-${Date.now()}`, title: 'Immaculate output delivery', description: 'Achieve absolute precision on difficult elements.', difficulty: 'Sinuous Vow', category: 'General', dayOffset: 25 },
-            { id: `fb12-${Date.now()}`, title: 'Rigorous internal error review', description: 'Rectify subtle weaknesses in thy style.', difficulty: 'Sinuous Vow', category: 'General', dayOffset: 28 }
-          ]
-        },
-        {
-          name: 'Phase 5 — Evolution',
-          lore: 'The covenant is fulfilled. Your hard work has transformed into automatic nature.',
-          tasks: [
-            { id: `fb13-${Date.now()}`, title: 'Grand culmination presentation', description: 'Conduct the ultimate demonstration of thy growth.', difficulty: 'Mortal Penance', category: 'General', dayOffset: 29 },
-            { id: `fb14-${Date.now()}`, title: 'Seal the Covenant forever', description: 'Review the historic ledger of triumphs with satisfaction.', difficulty: 'Lesser Burden', category: 'General', dayOffset: 30 }
-          ]
-        }
-      ],
-      status: 'In Quest',
-      createdAt: new Date().toISOString(),
-      linkedQuestsAdded: false
-    };
-  };
-
-  // Add standard quick tasks
-  const handleAddQuickTask = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddQuickTask = () => {
     const title = quickTaskTitle.trim();
     if (!title) return;
 
@@ -323,7 +252,6 @@ export function CampaignsTab({
     setQuickTaskTitle('');
   };
 
-  // Carve Stage tasks to active day calendar
   const handleCarveToCalendar = (goal: Goal) => {
     if (!goal || goal.linkedQuestsAdded) return;
     soundEngine.playClick();
@@ -354,12 +282,10 @@ export function CampaignsTab({
     });
 
     onAddQuestsBatch(newQuestsBatch);
-
     onUpdateGoals(prev => prev.map(g => g.id === goal.id ? { ...g, linkedQuestsAdded: true } : g));
     soundEngine.playSlash();
   };
 
-  // Toggle tasks check
   const handleToggleTaskCheckbox = (goal: Goal, taskTitle: string) => {
     const fullTitle = `⚔️ [${goal.title}] ${taskTitle}`;
     const matchedQuest = quests.find(q => q.title.toLowerCase().includes(taskTitle.toLowerCase()));
@@ -378,740 +304,1226 @@ export function CampaignsTab({
     }
   };
 
-  // Filter Quick Tasks (ones not prefixed with the campaign marker)
+  const handleAbandonCampaignClick = (goal: Goal) => {
+    Alert.alert(
+      "Abandon Crusade",
+      `Penitent, are you sure you want to abandon "${goal.title}" campaign? This will delete all its calendar steps forever.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Abandon", 
+          style: "destructive",
+          onPress: () => {
+            onAbandonCampaign(goal.id);
+            setIsDetailModalOpen(false);
+            setSelectedGoalId(null);
+          }
+        }
+      ]
+    );
+  };
+
   const quickTasksPool = quests.filter(q => {
     const isCampaignQuests = q.title.startsWith('⚔️ [') || q.title.includes('] ');
     return !isCampaignQuests;
   });
 
   return (
-    <div className="space-y-6 text-left animate-fade-in" id="campaigns-tab-viewport">
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
       
-      {/* 1. Header Information */}
-      <div className="border-b border-gothic-border/30 pb-4 flex justify-between items-center sm:items-center">
-        <div>
-          <h2 className="font-cinzel text-md md:text-lg font-bold tracking-widest text-gothic-gold uppercase flex items-center gap-2">
-            🛡️ Campaigns
-          </h2>
-          <p className="font-mono text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">
-            Sovereign Ledger of thy Growth & One-Time Devotions
-          </p>
-        </div>
-      </div>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>🛡️ Campaigns</Text>
+        <Text style={styles.headerSubtitle}>Sovereign Ledger of thy Growth & One-Time Devotions</Text>
+      </View>
 
-      {/* 2. Top-Level Segmented Mini Tabs */}
-      <div className="flex justify-center">
-        <div className="bg-gothic-card/95 border-2 border-gothic-border/60 p-1.5 rounded-2xl flex gap-1.5 w-full max-w-sm">
-          <button
-            onClick={() => {
+      {/* Segment Selector */}
+      <View style={styles.tabContainer}>
+        <View style={styles.tabsWrapper}>
+          <TouchableOpacity
+            onPress={() => {
               soundEngine.playClick();
-              if (goals.length > 0) {
-                setMiniTab('active');
-              } else {
-                soundEngine.playYouDied();
-              }
+              if (goals.length > 0) setMiniTab('active');
             }}
             disabled={goals.length === 0}
-            className={`flex-1 py-2 text-[10px] font-mono uppercase tracking-widest rounded-xl transition-all cursor-pointer ${
-              miniTab === 'active'
-                ? 'bg-gothic-gold/20 text-gothic-gold border border-gothic-gold/40 font-bold shadow-[inset_0_1px_5px_rgba(0,0,0,0.5)]'
-                : 'text-gray-500 hover:text-gray-300 border border-transparent disabled:opacity-30'
-            }`}
+            style={[styles.tabButton, miniTab === 'active' && styles.tabActive]}
           >
-            🛡️ Active Campaigns
-          </button>
-          <button
-            onClick={() => {
+            <Text style={[styles.tabText, miniTab === 'active' ? styles.tabTextActive : { color: COLORS.gray500 }]}>
+              🛡️ ACTIVE CAMPAIGNS
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
               soundEngine.playClick();
               setMiniTab('create');
             }}
-            className={`flex-1 py-2 text-[10px] font-mono uppercase tracking-widest rounded-xl transition-all cursor-pointer ${
-              miniTab === 'create'
-                ? 'bg-gothic-gold/20 text-gothic-gold border border-gothic-gold/40 font-bold shadow-[inset_0_1px_5px_rgba(0,0,0,0.5)]'
-                : 'text-gray-500 hover:text-gray-300 border border-transparent'
-            }`}
+            style={[styles.tabButton, miniTab === 'create' && styles.tabActive]}
           >
-            🖋️ Create
-          </button>
-        </div>
-      </div>
+            <Text style={[styles.tabText, miniTab === 'create' ? styles.tabTextActive : { color: COLORS.gray500 }]}>
+              🖋️ CREATE NEW
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
-      <div className="border-b border-gothic-border/10 my-4" />
+      {/* Active Tab Panel */}
+      {miniTab === 'active' && activeCampaign && (
+        <View style={styles.activePanel}>
+          <Text style={styles.subHeading}>Active Safekeeping Ledger ({goals.length})</Text>
+          
+          <View style={styles.goalsGrid}>
+            {goals.map((goal) => {
+              const progress = calculateCampaignProgress(goal);
+              return (
+                <TouchableOpacity
+                  key={goal.id}
+                  onPress={() => {
+                    soundEngine.playClick();
+                    setSelectedGoalId(goal.id);
+                    setIsDetailModalOpen(true);
+                  }}
+                  style={styles.goalCard}
+                >
+                  <View style={[styles.cardCorner, { top: 0, left: 0, borderTopWidth: 1, borderLeftWidth: 1 }]} />
+                  <View style={[styles.cardCorner, { bottom: 0, right: 0, borderBottomWidth: 1, borderRightWidth: 1 }]} />
 
-      {/* 3. View Switcher Portals */}
-      <AnimatePresence mode="wait">
-        {miniTab === 'active' && activeCampaign && (
-          <motion.div
-            key="active-tab-panel"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-            className="grid grid-cols-1 lg:grid-cols-12 gap-6"
-          >
-            {/* GRID OF MAIN CARDS */}
-            <div className="lg:col-span-12 space-y-4">
-              <h3 className="font-cinzel text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                Active Safekeeping Ledger ({goals.length})
-              </h3>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {goals.map((goal) => {
-                  const progress = calculateCampaignProgress(goal);
+                  <View style={styles.goalCardHeader}>
+                    <ProceduralEmblem name={goal.title} id={goal.id} createdAt={goal.createdAt} difficulty="Sinuous Vow" size={26} />
+                    <View style={styles.goalCardHeaderText}>
+                      <Text style={styles.goalCardTitle} numberOfLines={1}>{goal.title}</Text>
+                      <Text style={styles.goalCardCategory}>⚔️ {goal.categoryName}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.progressBarWrapper}>
+                    <View style={styles.progressBarBackground}>
+                      <View style={[styles.progressBarFill, { width: `${progress.percentage}%` }]} />
+                    </View>
+                    <View style={styles.progressBarLabelRow}>
+                      <Text style={styles.progressLabel}>{progress.percentage}% COMPLETE</Text>
+                      <Text style={styles.progressLabel}>{getDaysRemaining(goal)} DAYS LEFT</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.goalCardFooter}>
+                    <Text style={styles.footerLinkText}>OPEN LEDGER  →</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* Create Tab Panel */}
+      {miniTab === 'create' && (
+        <View style={styles.createPanel}>
+          
+          {/* Quick Tasks Section */}
+          <View style={styles.sectionCard}>
+            <View style={[styles.cardCorner, { top: 0, left: 0, borderTopWidth: 1, borderLeftWidth: 1 }]} />
+            <View style={[styles.cardCorner, { bottom: 0, right: 0, borderBottomWidth: 1, borderRightWidth: 1 }]} />
+
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Quick Tasks</Text>
+              <Text style={styles.sectionSubtitle}>What needs to be done?</Text>
+            </View>
+
+            <TextInput
+              maxLength={100}
+              placeholder="Enter quick task title..."
+              placeholderTextColor={COLORS.gray700}
+              value={quickTaskTitle}
+              onChangeText={setQuickTaskTitle}
+              style={styles.textInput}
+            />
+
+            <TouchableOpacity style={styles.quickTaskSubmitBtn} onPress={handleAddQuickTask}>
+              <Text style={styles.quickTaskSubmitBtnText}>[ Create Task ]</Text>
+            </TouchableOpacity>
+
+            <View style={styles.examplesRow}>
+              {['Buy groceries', 'Submit homework', 'Call client'].map((exTask) => (
+                <TouchableOpacity
+                  key={exTask}
+                  onPress={() => {
+                    soundEngine.playClick();
+                    setQuickTaskTitle(exTask);
+                  }}
+                  style={styles.exampleBadge}
+                >
+                  <Text style={styles.exampleBadgeText}>{exTask.toUpperCase()}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Quick Tasks List */}
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>🛡️ Pure Active Tasks List ({quickTasksPool.length})</Text>
+            <View style={styles.quickTasksList}>
+              {quickTasksPool.length === 0 ? (
+                <Text style={styles.noTasksText}>No active quick tasks inside ledger.</Text>
+              ) : (
+                quickTasksPool.map((task) => (
+                  <View key={task.id} style={styles.quickTaskItem}>
+                    <TouchableOpacity 
+                      onPress={() => onCompleteQuest(task.id)}
+                      style={[styles.smallCheckbox, task.completed && { borderColor: COLORS.gothicGold, backgroundColor: 'rgba(200, 158, 92, 0.2)' }]}
+                    >
+                      {task.completed && <Check size={10} color={COLORS.gothicGold} />}
+                    </TouchableOpacity>
+                    <Text style={[styles.quickTaskTitleText, task.completed && { textDecorationLine: 'line-through', color: COLORS.gray600 }]} numberOfLines={1}>
+                      {task.title}
+                    </Text>
+                    <TouchableOpacity onPress={() => onDeleteQuest(task.id)}>
+                      <Trash2 size={12} color={COLORS.gray600} />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </View>
+          </View>
+
+          {/* Campaign Creation Section */}
+          <View style={styles.sectionCard}>
+            <View style={[styles.cardCorner, { top: 0, right: 0, borderTopWidth: 1, borderRightWidth: 1 }]} />
+            <View style={[styles.cardCorner, { bottom: 0, left: 0, borderBottomWidth: 1, borderLeftWidth: 1 }]} />
+
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Campaign Creation</Text>
+              <Text style={styles.sectionSubtitle}>What do you want to become?</Text>
+            </View>
+
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>DIVINE ASPIRATION SEED / MASTER OBJECTIVE</Text>
+              <TextInput
+                placeholder="E.g., Learn Guitar, Build Muscle, Learn React..."
+                placeholderTextColor={COLORS.gray700}
+                value={aspirationInput}
+                onChangeText={setAspirationInput}
+                style={styles.textInput}
+              />
+            </View>
+
+            {planError ? (
+              <View style={styles.planErrorBox}>
+                <Text style={styles.planErrorText}>⚠️ Oracle Failure: {planError}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.examplesRow}>
+              {['Learn Guitar', 'Build Muscle', 'Learn React', 'Improve Sleep'].map((tag) => (
+                <TouchableOpacity
+                  key={tag}
+                  onPress={() => {
+                    soundEngine.playClick();
+                    setAspirationInput(tag);
+                  }}
+                  style={styles.exampleBadge}
+                >
+                  <Text style={styles.exampleBadgeText}>{tag.toUpperCase()}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.campaignSubmitBtn, isPlanningLoading && { opacity: 0.5 }]} 
+              onPress={handleCreateCampaignSubmit}
+              disabled={isPlanningLoading}
+            >
+              {isPlanningLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <View style={styles.campaignSubmitContent}>
+                  <RefreshCw size={12} color={COLORS.gothicGold} />
+                  <Text style={styles.campaignSubmitBtnText}>[ GENERATE CAMPAIGN ]</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+        </View>
+      )}
+
+      {/* DETAIL MODAL OVERLAY */}
+      {isDetailModalOpen && activeCampaign && (
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalContent} contentContainerStyle={{ paddingBottom: 64 }} showsVerticalScrollIndicator={false}>
+            
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <ProceduralEmblem name={activeCampaign.title} id={activeCampaign.id} createdAt={activeCampaign.createdAt} difficulty="Mortal Penance" size={30} />
+                <View>
+                  <Text style={styles.modalHeaderCategory}>ACTIVE CAMPAIGN TITLE</Text>
+                  <Text style={styles.modalHeaderTitle} numberOfLines={1}>{activeCampaign.title}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.modalCloseBtn}
+                onPress={() => { soundEngine.playClick(); setIsDetailModalOpen(false); }}
+              >
+                <Text style={styles.modalCloseBtnText}>† CLOSE LEDGER</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Campaign Status Box */}
+            <View style={styles.statusBox}>
+              <View>
+                <Text style={styles.statusBoxSubText}>Campaign Status</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  <Shield size={12} color={COLORS.gothicGold} />
+                  <Text style={styles.statusBoxText}>
+                    {activeCampaign.status === 'In Quest' ? 'In Quest (Active)' : activeCampaign.status}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusBadgeText}>★ Focus Active</Text>
+              </View>
+            </View>
+
+            {/* HUD Panel Metrics */}
+            <View style={styles.hudPanel}>
+              <View style={styles.hudPanelCol}>
+                <Text style={styles.hudLabel}>COMPLETION %</Text>
+                <Text style={styles.hudValue}>{calculateCampaignProgress(activeCampaign).percentage}% Complete</Text>
+                <View style={[styles.hudProgressBarBg, { marginTop: 4 }]}>
+                  <View style={[styles.hudProgressBarFill, { width: `${calculateCampaignProgress(activeCampaign).percentage}%` }]} />
+                </View>
+              </View>
+              <View style={[styles.hudPanelCol, styles.hudBorderCol]}>
+                <Text style={styles.hudLabel}>DAYS REMAINING</Text>
+                <Text style={styles.hudValue}>📅 {getDaysRemaining(activeCampaign)} Days Left</Text>
+                <Text style={styles.hudSubLabel}>30-DAY TEMPLE PERIOD</Text>
+              </View>
+              <View style={[styles.hudPanelCol, styles.hudBorderCol]}>
+                <Text style={styles.hudLabel}>CURRENT PHASE</Text>
+                <Text style={[styles.hudValue, { color: COLORS.gothicGold }]} numberOfLines={1}>
+                  🛡️ {getPhaseAndWeek(activeCampaign).phaseName}
+                </Text>
+                <Text style={styles.hudSubLabel}>ACTIVE FOCUS TIER</Text>
+              </View>
+            </View>
+
+            {/* Milestones / Stage Selector */}
+            <View style={styles.milestoneSection}>
+              <View style={styles.milestoneHeader}>
+                <BookOpen size={14} color={COLORS.gothicGold} />
+                <Text style={styles.milestoneHeaderTitle}>Campaign Progress Roadmap</Text>
+              </View>
+
+              <View style={styles.stageGrid}>
+                {activeCampaign.stages.map((stage, idx) => {
+                  const activePhaseInfo = getPhaseAndWeek(activeCampaign);
+                  const activeStageIndex = activePhaseInfo.index;
+                  const isCurrent = activeStageIndex === idx;
+                  const hasCompletedAll = stage.tasks?.every(task => 
+                    quests.some(q => q.title.toLowerCase().includes(task.title.toLowerCase()) && q.completed)
+                  );
+                  const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
+                  const isSelectedForPreview = currentViewStageIndex === idx;
 
                   return (
-                    <div
-                      key={goal.id}
-                      onClick={() => {
+                    <TouchableOpacity
+                      key={idx}
+                      onPress={() => {
                         soundEngine.playClick();
-                        setSelectedGoalId(goal.id);
-                        setIsDetailModalOpen(true);
+                        setPreviewStageIndex(idx);
                       }}
-                      className="p-5 rounded-xl border bg-gothic-card/40 border-gothic-border/70 hover:border-gothic-gold hover:bg-gothic-card/90 cursor-pointer shadow-lg transition-all relative overflow-hidden flex flex-col justify-between min-h-[145px] group hover:scale-[1.01]"
+                      style={[
+                        styles.stageGridBtn,
+                        isSelectedForPreview && { borderColor: COLORS.gothicGold, backgroundColor: 'rgba(200, 158, 92, 0.2)' },
+                        isCurrent && !isSelectedForPreview && { borderColor: 'rgba(200, 158, 92, 0.4)', backgroundColor: 'rgba(200, 158, 92, 0.05)' },
+                        hasCompletedAll && !isCurrent && !isSelectedForPreview && { borderColor: 'rgba(16, 185, 129, 0.2)', backgroundColor: 'rgba(16, 185, 129, 0.05)' }
+                      ]}
                     >
-                      <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-gothic-gold/25 group-hover:border-gothic-gold/60" />
-                      <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-gothic-gold/25 group-hover:border-gothic-gold/60" />
-
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-4">
-                          <ProceduralEmblem name={goal.title} id={goal.id} createdAt={goal.createdAt} difficulty="Sinuous Vow" size={28} />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-cinzel text-xs font-black text-gothic-gold tracking-wider uppercase truncate group-hover:text-yellow-400">
-                              {goal.title}
-                            </h4>
-                            <span className="inline-block font-mono text-[7px] text-gray-400 uppercase tracking-widest mt-1">
-                              ⚔️ {goal.categoryName}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Miniature status and progress bar */}
-                        <div className="space-y-1.5 pt-1">
-                          <div className="w-full h-1 bg-black rounded-lg overflow-hidden border border-gothic-border/20">
-                            <div 
-                              className="h-full bg-gothic-gold transition-all duration-300"
-                              style={{ width: `${progress.percentage}%` }}
-                            />
-                          </div>
-                          <div className="flex justify-between items-center text-[7.5px] font-mono text-gray-500 uppercase tracking-widest">
-                            <span>{progress.percentage}% COMPLETE</span>
-                            <span>{getDaysRemaining(goal)} DAYS LEFT</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 pt-2 border-t border-gothic-border/10 flex justify-end">
-                        <span className="font-mono text-[8.5px] text-gothic-gold uppercase tracking-widest group-hover:translate-x-1 duration-150 transition-all inline-flex items-center gap-1.5 font-bold">
-                          OPEN LEDGER <ArrowRight className="w-3.5 h-3.5" />
-                        </span>
-                      </div>
-                    </div>
+                      <Text style={[styles.stageGridName, isSelectedForPreview && { color: COLORS.gothicGold }]} numberOfLines={1}>
+                        {stage.name.replace('Phase ', 'Ph. ')}
+                      </Text>
+                      <Text style={[styles.stageGridStatus, hasCompletedAll ? { color: '#10b981' } : isCurrent ? { color: COLORS.gothicGold } : { color: COLORS.gray600 }]}>
+                        {hasCompletedAll ? '✔ SECURED' : isCurrent ? '★ FOCUS' : '🔒 LOCK'}
+                      </Text>
+                    </TouchableOpacity>
                   );
                 })}
-              </div>
-            </div>
+              </View>
+            </View>
 
-            {/* RIGHT SIDE (MODAL COMPATIBLE POP-UP PORTAL) */}
-            {isDetailModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                {/* BACKDROP OVERLAY */}
-                <div 
-                  className="fixed inset-0 bg-black/85 backdrop-blur-md transition-opacity"
-                  onClick={() => {
-                    soundEngine.playClick();
-                    setIsDetailModalOpen(false);
-                  }}
-                />
-
-                {/* THE POP-UP CARD DETAILS BLOCK */}
-                <div className="relative w-full max-w-2xl bg-gothic-card p-6 md:p-8 rounded-2xl border-2 border-gothic-gold/70 relative text-left space-y-6 shadow-[0_0_50px_rgba(0,0,0,0.92)] max-h-[85vh] overflow-y-auto z-10">
-                  
-                  {/* Visual frame accents for true dark fantasy setting */}
-                  <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-gothic-gold/25" />
-                  <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-gothic-gold/25" />
-                  <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-gothic-gold/25" />
-                  <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-gothic-gold/25" />
-
-                  {/* Close Header banner */}
-                  <div className="flex justify-between items-center border-b border-gothic-border/30 pb-4">
-                    <div className="flex items-center gap-2">
-                      <ProceduralEmblem name={activeCampaign.title} id={activeCampaign.id} createdAt={activeCampaign.createdAt} difficulty="Mortal Penance" size={32} />
-                      <div>
-                        <span className="block font-mono text-[8px] text-gray-500 uppercase tracking-widest">Active Campaign Title</span>
-                        <h3 className="font-cinzel text-sm font-black text-gothic-gold tracking-widest uppercase">
-                          {activeCampaign.title}
-                        </h3>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        soundEngine.playClick();
-                        setIsDetailModalOpen(false);
-                      }}
-                      className="px-3 py-1 bg-gothic-gold/10 hover:bg-gothic-gold text-gothic-gold hover:text-black border border-gothic-gold/40 font-mono text-[8px] uppercase tracking-widest font-black transition-all cursor-pointer rounded"
-                    >
-                      † CLOSE LEDGER
-                    </button>
-                  </div>
-
-                  {/* Campaign Status Box */}
-                  <div className="bg-black/40 border border-gothic-border/60 px-4 py-2.5 rounded-xl flex items-center justify-between gap-3">
-                    <div>
-                      <span className="font-mono text-[7px] text-gray-500 uppercase tracking-widest block">Campaign Status</span>
-                      <span className="font-mono text-[9px] font-bold text-gothic-gold uppercase tracking-wider flex items-center gap-1.5 mt-0.5">
-                        <Shield className="w-3 h-3 text-gothic-gold animate-pulse" />
-                        {activeCampaign.status === 'In Quest' ? 'In Quest (Active)' : activeCampaign.status}
-                      </span>
-                    </div>
-
-                    <span className="font-mono text-[8px] text-emerald-500 uppercase font-black bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
-                      ★ Focus Active
-                    </span>
-                  </div>
-
-                  {/* HUD Panel containing: Completion %, Days Remaining, Current Phase */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 bg-gothic-back/75 border border-gothic-border/60 p-4 rounded-xl">
-                    {/* Completion % */}
-                    <div className="space-y-1 text-center sm:text-left">
-                      <span className="block font-mono text-[8px] text-gray-500 uppercase tracking-widest">Completion %</span>
-                      <span className="block font-cinzel text-md font-black text-gothic-gold text-sm">
-                        {calculateCampaignProgress(activeCampaign).percentage}% Complete
-                      </span>
-                      <div className="w-full h-1 bg-black rounded-lg overflow-hidden mt-1.5 border border-gothic-border/20">
-                        <div 
-                          className="h-full bg-gothic-gold"
-                          style={{ width: `${calculateCampaignProgress(activeCampaign).percentage}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Days Remaining */}
-                    <div className="space-y-1 text-center sm:text-left border-t sm:border-t-0 sm:border-l border-gothic-border/40 sm:pl-4 pt-2.5 sm:pt-0">
-                      <span className="block font-mono text-[8px] text-gray-500 uppercase tracking-widest">Days Remaining</span>
-                      <span className="block font-cinzel text-md font-black text-gray-200 text-sm">
-                        📅 {getDaysRemaining(activeCampaign)} Days Left
-                      </span>
-                      <span className="block font-mono text-[7px] text-gray-500 uppercase mt-0.5">30-DAY TEMPLE PERIOD</span>
-                    </div>
-
-                    {/* Current Phase */}
-                    <div className="space-y-1 text-center sm:text-left border-t sm:border-t-0 sm:border-l border-gothic-border/40 sm:pl-4 pt-2.5 sm:pt-0">
-                      <span className="block font-mono text-[8px] text-gray-500 uppercase tracking-widest">Current Phase</span>
-                      <span className="block font-cinzel text-md font-black text-gothic-gold-dim uppercase truncate text-sm">
-                        🛡️ {getPhaseAndWeek(activeCampaign).phaseName}
-                      </span>
-                      <span className="block font-mono text-[7px] text-emerald-500 uppercase font-black tracking-widest mt-1">
-                        Active Focus Tier
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Strategic Roadmap Progress (Visualization of Phases) */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-cinzel text-[10px] font-bold text-gothic-gold uppercase tracking-wider flex items-center gap-1.5">
-                        <BookOpen className="w-3.5 h-3.5 text-gothic-gold" />
-                        Campaign Progress Roadmap & Milestones
-                      </h4>
-                      {previewStageIndex !== null && (
-                        <button
-                          onClick={() => {
-                            soundEngine.playClick();
-                            setPreviewStageIndex(null);
-                          }}
-                          className="font-mono text-[7.5px] text-gothic-gold/80 hover:text-gothic-gold uppercase tracking-widest border border-gothic-gold/30 hover:border-gothic-gold px-1.5 py-0.5 rounded transition-all bg-black/40"
-                        >
-                          Show Current active
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                      {activeCampaign.stages.map((stage, idx) => {
-                        const activePhaseInfo = getPhaseAndWeek(activeCampaign);
-                        const activeStageIndex = activePhaseInfo.index;
-                        const isCurrent = activeStageIndex === idx;
-                        const hasCompletedAll = stage.tasks?.every(task => 
-                          quests.some(q => q.title.toLowerCase().includes(task.title.toLowerCase()) && q.completed)
-                        );
-                        const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
-                        const isSelectedForPreview = currentViewStageIndex === idx;
-
-                        return (
-                          <div 
-                            key={idx} 
-                            onClick={() => {
-                              soundEngine.playClick();
-                              setPreviewStageIndex(idx);
-                            }}
-                            className={`p-2.5 rounded-lg border text-center flex flex-col justify-between cursor-pointer transition-all hover:scale-[1.02] ${
-                              isSelectedForPreview 
-                                ? 'bg-gothic-gold/20 border-gothic-gold text-gothic-gold ring-1 ring-gothic-gold/40 shadow-[0_0_10px_rgba(200,158,92,0.15)] font-bold' 
-                                : isCurrent 
-                                  ? 'bg-gothic-gold/5 border-gothic-gold/60 text-gothic-gold/90' 
-                                  : hasCompletedAll 
-                                    ? 'bg-black/35 border-emerald-950/40 text-gray-500' 
-                                    : 'bg-black/20 border-gothic-border/40 text-gray-600 hover:text-gray-400'
-                            }`}
-                          >
-                            <span className="block font-cinzel text-[8.5px] font-semibold uppercase leading-none truncate mb-1">
-                              {stage.name.replace('Phase ', 'Ph. ')}
-                            </span>
-                            <span className={`block font-mono text-[7px] uppercase font-black tracking-widest ${
-                              isSelectedForPreview 
-                                ? 'text-gothic-gold' 
-                                : isCurrent 
-                                  ? 'text-gothic-gold' 
-                                  : hasCompletedAll 
-                                    ? 'text-emerald-500' 
-                                    : 'text-gray-600'
-                            }`}>
-                              {hasCompletedAll ? '✔ SECURED' : isCurrent ? '★ FOCUS' : '🔒 LOCKED'}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Target Current Objectives View (Direct checkable targets for active development phase) */}
-                  <div className="space-y-3 border-t border-gothic-border/30 pt-4">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-cinzel text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                        {(() => {
-                          const activePhaseInfo = getPhaseAndWeek(activeCampaign);
-                          const activeStageIndex = activePhaseInfo.index;
-                          const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
-                          if (currentViewStageIndex === activeStageIndex) {
-                            return <>🕯️ Current Objectives (Check off to advance)</>;
-                          } else if (currentViewStageIndex > activeStageIndex) {
-                            return <>🔒 Previewing Locked Objectives</>;
-                          } else {
-                            return <>✔ Previewing Completed Objectives</>;
-                          }
-                        })()}
-                      </h4>
-                      <span className="font-mono text-[8px] text-gothic-gold uppercase tracking-widest">
-                        {(() => {
-                          const activePhaseInfo = getPhaseAndWeek(activeCampaign);
-                          const activeStageIndex = activePhaseInfo.index;
-                          const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
-                          const currentViewStage = activeCampaign.stages[currentViewStageIndex];
-                          return currentViewStage?.name || `Phase ${currentViewStageIndex + 1}`;
-                        })()}
-                      </span>
-                    </div>
-
-                    {/* Distribution action bar if not carved yet */}
-                    {!activeCampaign.linkedQuestsAdded && (
-                      <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
-                        <div>
-                          <span className="block font-cinzel text-[8.5px] text-gothic-gold uppercase font-bold tracking-wider">Uncarved Campaign Blueprint</span>
-                          <p className="font-mono text-[7.5px] text-gray-400 uppercase tracking-wide mt-0.5">Tasks have not been carved onto thy calendar. Click to distribute evenly.</p>
-                        </div>
-                        <div className="flex items-center gap-1.5 self-end sm:self-center">
-                          <input 
-                            type="date" 
-                            value={startDateStr}
-                            onChange={(e) => setStartDateStr(e.target.value)}
-                            className="bg-black border border-gothic-border/80 font-mono text-[8px] uppercase px-2 py-1 text-gray-300 rounded focus:border-gothic-gold"
-                          />
-                          <button
-                            onClick={() => handleCarveToCalendar(activeCampaign)}
-                            className="px-2.5 py-1 bg-gothic-gold/25 hover:bg-gothic-gold text-gothic-gold hover:text-black border border-gothic-gold/40 hover:border-transparent font-mono text-[8px] uppercase tracking-widest font-black transition-all cursor-pointer rounded"
-                          >
-                            Carve To Calendar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* List of objectives in the current phase */}
-                    <div className="space-y-2">
-                      {(() => {
-                        const activePhaseInfo = getPhaseAndWeek(activeCampaign);
-                        const activeStageIndex = activePhaseInfo.index;
-                        const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
-                        const currentViewStage = activeCampaign.stages[currentViewStageIndex];
-                        const isStageLocked = currentViewStageIndex > activeStageIndex;
-
-                        return currentViewStage?.tasks?.map((task) => {
-                          const matchingQuest = quests.find(q => 
-                            q.title.toLowerCase().includes(task.title.toLowerCase())
-                          );
-                          const isCompleted = !!(matchingQuest && matchingQuest.completed);
-                          const isExpanded = !!expandedTaskIds[task.id];
-
-                          return (
-                            <div 
-                              key={task.id}
-                              onClick={() => {
-                                soundEngine.playClick();
-                                setExpandedTaskIds(prev => ({
-                                  ...prev,
-                                  [task.id]: !prev[task.id]
-                                }));
-                              }}
-                              className={`p-3 rounded-xl border transition-all duration-200 flex flex-col gap-2.5 cursor-pointer text-left select-none ${
-                                isExpanded 
-                                  ? 'bg-gothic-card border-gothic-gold/60 shadow-[inset_0_0_10px_rgba(200,158,92,0.08)]' 
-                                  : 'bg-black/40 border-gothic-border/30 hover:border-gothic-gold/50'
-                              }`}
-                            >
-                              <div className="flex justify-between items-start gap-2.5">
-                                {/* Left details trigger */}
-                                <div className="min-w-0 flex-1 flex items-start gap-2">
-                                  <ChevronRight className={`w-3.5 h-3.5 mt-0.5 text-gothic-gold transition-transform duration-200 shrink-0 ${
-                                    isExpanded ? 'rotate-90' : ''
-                                  }`} />
-                                  <div className="min-w-0 flex-1">
-                                    <span className={`block font-cinzel text-[10px] uppercase font-bold tracking-wider ${
-                                      isCompleted ? 'line-through text-gray-500' : 'text-gray-200'
-                                    } ${isExpanded ? '' : 'truncate'}`}>
-                                      {task.title}
-                                    </span>
-                                    <span className={`block font-mono text-[8.5px] text-gray-500 uppercase mt-0.5 ${
-                                      isExpanded ? 'whitespace-normal text-gray-400 font-medium' : 'truncate'
-                                    }`}>
-                                      {task.description}
-                                    </span>
-                                  </div>
-                                </div>
-                                
-                                {/* Right interactive items */}
-                                <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                                  <span className="font-mono text-[6.5px] text-gray-500 uppercase border border-gothic-border/40 px-1 py-0.5 rounded leading-none">
-                                    {task.difficulty}
-                                  </span>
-                                  {isStageLocked ? (
-                                    <div 
-                                      className="w-4 h-4 rounded border border-gothic-border/20 bg-black/40 text-gray-600 flex items-center justify-center cursor-not-allowed opacity-60"
-                                      title="This phase is locked. Resolve current objectives first."
-                                    >
-                                      <Lock className="w-2.5 h-2.5" />
-                                    </div>
-                                  ) : (
-                                    <div 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleTaskCheckbox(activeCampaign, task.title);
-                                      }}
-                                      className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all ${
-                                        isCompleted 
-                                          ? 'border-gothic-gold bg-gothic-gold/15 text-gothic-gold' 
-                                          : 'border-gothic-border bg-gothic-back/40 text-transparent hover:border-gothic-gold/40'
-                                      }`}
-                                    >
-                                      {isCompleted && <Check className="w-3 h-3" />}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Expanded interactive block */}
-                              {isExpanded && (
-                                <div className="pt-2 border-t border-gothic-border/10 flex flex-col gap-2 bg-gothic-back/30 p-2.5 rounded-lg text-[8.5px] font-mono text-gray-400 uppercase tracking-wider">
-                                  <div className="flex justify-between items-center text-[7.5px] text-gray-500">
-                                    <span>Objective Type: Daily Vow</span>
-                                    <span>Task Master: Penitent's Oath</span>
-                                  </div>
-                                  <div className="text-gray-300 normal-case font-sans">
-                                    <span className="font-bold text-[8.5px] font-mono text-gothic-gold uppercase tracking-widest block mb-1">Details:</span>
-                                    {task.description || "No ancient scriptures recorded for this objective."}
-                                  </div>
-                                  <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-gothic-border/5">
-                                    <span className="text-[7.5px] text-yellow-500/80 font-bold">★ XP value: {task.difficulty === 'Sinuous Vow' ? 150 : task.difficulty === 'Mortal Penance' ? 300 : 75} XP</span>
-                                    {isStageLocked ? (
-                                      <span className="text-[7.5px] text-gothic-crimson uppercase tracking-widest font-black flex items-center gap-1.5 bg-gothic-crimson/10 border border-gothic-crimson/20 px-2.5 py-1 rounded">
-                                        🔒 Locked • Resolve active focus tier first
-                                      </span>
-                                    ) : (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleToggleTaskCheckbox(activeCampaign, task.title);
-                                        }}
-                                        className={`px-2 py-0.5 rounded text-[8px] font-mono font-bold border transition-all ${
-                                          isCompleted 
-                                            ? 'bg-gothic-gold/10 border-gothic-gold/30 text-gothic-gold' 
-                                            : 'bg-gothic-gold/20 border-gothic-gold text-black hover:bg-gothic-gold/30 hover:text-gothic-gold'
-                                        }`}
-                                      >
-                                        {isCompleted ? '† MARK UNFINISHED' : '† CLEANSE & COMPLETE'}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* AI Assessment (Encouraging feedback/appraisal details) */}
-                  <div className="p-4 rounded-xl bg-gothic-gold/5 border border-gothic-border/60 text-left space-y-2 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-2 opacity-5">
-                      <Sparkles className="w-12 h-12 text-gothic-gold" />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-gothic-gold animate-pulse" />
-                      <span className="font-cinzel text-[9.5px] text-[#c89e5c] uppercase font-bold tracking-widest">
-                        Strategist AI Assessment
-                      </span>
-                    </div>
-                    <p className="font-mono text-[9px] text-[#a0aab8] uppercase leading-relaxed font-semibold">
-                      {generateDynamicAdvisorText(activeCampaign)}
-                    </p>
-                  </div>
-
-                  {/* Bottom Attribute Catalyst logs */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-2">
-                    <div className="p-3.5 bg-gothic-back rounded-xl border border-gothic-border/30">
-                      <span className="block font-mono text-[7px] text-gray-500 uppercase tracking-widest">Mastery Catalysts</span>
-                      <span className="font-cinzel text-[10.5px] font-black text-gothic-gold uppercase tracking-widest mt-1 block leading-tight">
-                        ⚔️ Attribute Mastery Unlocks
-                      </span>
-                    </div>
-                    <div className="p-3.5 bg-gothic-back rounded-xl border border-gothic-border/30">
-                      <span className="block font-mono text-[7px] text-gray-500 uppercase tracking-widest">Avatar Evolution Influence</span>
-                      <span className="font-cinzel text-[10.5px] font-black text-[#5fc6f0] uppercase tracking-widest mt-1 block leading-tight">
-                        💎 Promotes Level-Up XP
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Abandon Command Trigger */}
-                  <div className="pt-4 border-t border-gothic-border/25 text-right">
-                    <button
-                      onClick={() => {
-                        if (confirm(`Penitent, are you sure you want to abandon "${activeCampaign.title}" campaign? This will delete all its calendar steps forever.`)) {
-                          onAbandonCampaign(activeCampaign.id);
-                          setIsDetailModalOpen(false);
-                          setSelectedGoalId(null);
-                        }
-                      }}
-                      className="p-2.5 bg-gothic-back hover:bg-gothic-crimson/15 border border-gothic-crimson/25 hover:border-gothic-crimson rounded text-gothic-crimson text-[8.5px] font-mono uppercase tracking-widest cursor-pointer transition-all inline-flex items-center gap-1.5"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Abandon Crusade Campaign
-                    </button>
-                  </div>
-
-                </div>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {miniTab === 'create' && (
-          <motion.div
-            key="create-tab-panel"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-            className="grid grid-cols-1 md:grid-cols-12 gap-8 text-left"
-          >
-            {/* LEFT COLUMN/TOP PORTION (SECTION 1): QUICK TASKS */}
-            <div className="md:col-span-5 space-y-5">
-              <div className="p-6 bg-gothic-card rounded-2xl border-2 border-gothic-border relative overflow-hidden text-left space-y-4 shadow-[0_4px_20px_rgba(0,0,0,0.6)]">
-                <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-gothic-gold/20" />
-                <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-gothic-gold/20" />
-
-                <div className="border-b border-gothic-border/20 pb-3">
-                  <h3 className="font-cinzel text-xs font-black text-gothic-gold uppercase tracking-widest">
-                    Quick Tasks
-                  </h3>
-                  <p className="font-mono text-[8px] text-gray-500 uppercase tracking-widest mt-0.5">
-                    What needs to be done?
-                  </p>
-                </div>
-
-                <form onSubmit={handleAddQuickTask} className="space-y-3">
-                  <input
-                    type="text"
-                    required
-                    maxLength={100}
-                    placeholder="Enter quick task title..."
-                    value={quickTaskTitle}
-                    onChange={(e) => setQuickTaskTitle(e.target.value)}
-                    className="w-full bg-gothic-back border border-gothic-border/80 focus:border-gothic-gold rounded-lg px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-gray-600 focus:outline-none transition-all"
+            {/* Uncarved Blueprint Alert */}
+            {!activeCampaign.linkedQuestsAdded && (
+              <View style={styles.blueprintAlertCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.blueprintAlertTitle}>Uncarved Campaign Blueprint</Text>
+                  <Text style={styles.blueprintAlertSubtitle}>Tasks have not been carved onto thy calendar. Click to distribute evenly.</Text>
+                </View>
+                <View style={styles.blueprintAlertActions}>
+                  <TextInput
+                    value={startDateStr}
+                    onChangeText={setStartDateStr}
+                    style={styles.startDateInput}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={COLORS.gray700}
                   />
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 bg-gothic-gold text-black hover:bg-amber-500 font-mono text-[9px] uppercase tracking-widest font-black rounded-lg transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
-                  >
-                    [ Create Task ]
-                  </button>
-                </form>
+                  <TouchableOpacity style={styles.carveBtn} onPress={() => handleCarveToCalendar(activeCampaign)}>
+                    <Text style={styles.carveBtnText}>Carve To Calendar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
-                <div className="space-y-1.5 pt-1">
-                  <span className="block text-[7.5px] font-mono text-gray-500 uppercase tracking-widest font-semibold">Examples of Quick Devotions:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['Buy groceries', 'Submit assignment', 'Call friend', 'Pay electricity bill'].map((exTask) => (
-                      <button
-                        key={exTask}
-                        type="button"
-                        onClick={() => {
-                          soundEngine.playClick();
-                          setQuickTaskTitle(exTask);
-                        }}
-                        className="px-2 py-1 bg-gothic-back hover:bg-gothic-gold/10 text-gray-400 hover:text-white border border-gothic-border/65 rounded font-mono text-[7.5px] uppercase transition-all cursor-pointer"
-                      >
-                        {exTask}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            {/* Current Objectives List */}
+            <View style={styles.objectivesSection}>
+              <Text style={styles.objectivesHeaderTitle}>
+                {(() => {
+                  const activePhaseInfo = getPhaseAndWeek(activeCampaign);
+                  const activeStageIndex = activePhaseInfo.index;
+                  const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
+                  if (currentViewStageIndex === activeStageIndex) return '🕯️ Current Objectives';
+                  if (currentViewStageIndex > activeStageIndex) return '🔒 Previewing Locked Stage';
+                  return '✔ Previewing Completed Stage';
+                })()}
+              </Text>
 
-                <div className="text-gray-500 font-mono text-[7.5px] uppercase tracking-wider leading-relaxed border-t border-gothic-border/10 pt-3">
-                  Quick Tasks are: <br />
-                  • One-time objectives <br />
-                  • No phases & no progression <br />
-                  • No AI roadmaps & no skill rewards <br />
-                  Complete → Archive
-                </div>
-              </div>
+              <View style={{ gap: 8 }}>
+                {(() => {
+                  const activePhaseInfo = getPhaseAndWeek(activeCampaign);
+                  const activeStageIndex = activePhaseInfo.index;
+                  const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
+                  const currentViewStage = activeCampaign.stages[currentViewStageIndex];
+                  const isStageLocked = currentViewStageIndex > activeStageIndex;
 
-              {/* QUICK TASKS LIVE CHECKBOX PANEL (FOR IMMEDIATE ACTION WITHIN THIS TAB) */}
-              <div className="p-4 bg-gothic-card/50 rounded-xl border border-gothic-border/40 text-left space-y-3">
-                <span className="font-cinzel text-[8.5px] font-bold text-gray-500 uppercase tracking-widest block border-b border-gothic-border/10 pb-1.5">
-                  🛡️ Pure Active Tasks List ({quickTasksPool.length})
-                </span>
-                
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {quickTasksPool.length === 0 ? (
-                    <div className="text-center py-4 text-gray-600 font-mono text-[7.5px] uppercase">
-                      No active quick tasks inside ledger.
-                    </div>
-                  ) : (
-                    quickTasksPool.map((task) => (
-                      <div 
+                  return currentViewStage?.tasks?.map((task) => {
+                    const matchingQuest = quests.find(q => 
+                      q.title.toLowerCase().includes(task.title.toLowerCase())
+                    );
+                    const isCompleted = !!(matchingQuest && matchingQuest.completed);
+                    const isExpanded = !!expandedTaskIds[task.id];
+
+                    return (
+                      <TouchableOpacity
                         key={task.id}
-                        className="p-2 rounded bg-gothic-back/40 border border-gothic-border/30 flex justify-between items-center"
+                        activeOpacity={0.9}
+                        onPress={() => {
+                          soundEngine.playClick();
+                          setExpandedTaskIds(prev => ({ ...prev, [task.id]: !prev[task.id] }));
+                        }}
+                        style={[styles.objectiveCard, isExpanded && { borderColor: COLORS.gothicGold, backgroundColor: COLORS.gothicCard }]}
                       >
-                        <div className="flex items-center gap-2 max-w-[80%]">
-                          <button
-                            onClick={() => onCompleteQuest(task.id)}
-                            className={`w-4 h-4 border flex items-center justify-center rounded transition-all flex-shrink-0 ${
-                              task.completed 
-                                ? 'border-gothic-gold bg-gothic-gold/20 text-gothic-gold' 
-                                : 'border-gothic-border bg-gothic-back text-transparent hover:border-gothic-gold'
-                            }`}
-                          >
-                            {task.completed && <Check className="w-3 h-3" />}
-                          </button>
-                          <span className={`font-cinzel text-[9px] uppercase truncate ${
-                            task.completed ? 'line-through text-gray-600' : 'text-gray-300 font-semibold'
-                          }`}>
-                            {task.title}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => onDeleteQuest(task.id)}
-                          className="text-gray-600 hover:text-gothic-crimson p-0.5 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
+                        <View style={styles.objectiveHeaderRow}>
+                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <ChevronRight size={12} color={COLORS.gothicGold} style={isExpanded && { transform: [{ rotate: '90deg' }] }} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.objectiveTitle, isCompleted && { textDecorationLine: 'line-through', color: COLORS.gray600 }]} numberOfLines={1}>
+                                {task.title}
+                              </Text>
+                            </View>
+                          </View>
+                          
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.objectiveDiffBadge}>{task.difficulty.toUpperCase()}</Text>
+                            {isStageLocked ? (
+                              <View style={styles.lockBadge}>
+                                <Lock size={8} color={COLORS.gray600} />
+                              </View>
+                            ) : (
+                              <TouchableOpacity
+                                onPress={() => handleToggleTaskCheckbox(activeCampaign, task.title)}
+                                style={[styles.objectiveCheckbox, isCompleted && { borderColor: COLORS.gothicGold, backgroundColor: 'rgba(200, 158, 92, 0.2)' }]}
+                              >
+                                {isCompleted && <Check size={10} color={COLORS.gothicGold} />}
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
 
-            {/* RIGHT COLUMN/BOTTOM PORTION (SECTION 2): CAMPAIGN CREATION */}
-            <div className="md:col-span-7">
-              <div className="p-6 bg-gothic-card rounded-2xl border-2 border-gothic-border relative overflow-hidden text-left space-y-5 shadow-[0_4px_24px_rgba(0,0,0,0.7)] flex flex-col justify-between min-h-[380px]">
-                <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-gothic-gold/20" />
-                <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-gothic-gold/20" />
+                        {isExpanded && (
+                          <View style={styles.objectiveExpanded}>
+                            <Text style={styles.expandedLabel}>DETAILS:</Text>
+                            <Text style={styles.expandedDesc}>
+                              {task.description || "No ancient scriptures recorded for this objective."}
+                            </Text>
+                            <View style={styles.expandedFooter}>
+                              <Text style={styles.xpText}>
+                                ★ XP value: {task.difficulty === 'Sinuous Vow' ? 150 : task.difficulty === 'Mortal Penance' ? 300 : 75} XP
+                              </Text>
+                              {!isStageLocked && (
+                                <TouchableOpacity 
+                                  style={styles.cleanseBtn}
+                                  onPress={() => handleToggleTaskCheckbox(activeCampaign, task.title)}
+                                >
+                                  <Text style={styles.cleanseBtnText}>
+                                    {isCompleted ? '† MARK UNFINISHED' : '† CLEANSE & COMPLETE'}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  });
+                })()}
+              </View>
+            </View>
 
-                <div className="space-y-4">
-                  <div className="border-b border-gothic-border/20 pb-3">
-                    <h3 className="font-cinzel text-xs font-black text-gothic-gold uppercase tracking-widest">
-                      Campaign Creation
-                    </h3>
-                    <p className="font-mono text-[8px] text-gray-500 uppercase tracking-widest mt-0.5">
-                      What do you want to become?
-                    </p>
-                  </div>
+            {/* AI Advisor Assessment */}
+            <View style={styles.advisorCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <Sparkles size={12} color={COLORS.gothicGold} />
+                <Text style={styles.advisorHeaderTitle}>Strategist AI Assessment</Text>
+              </View>
+              <Text style={styles.advisorText}>
+                {generateDynamicAdvisorText(activeCampaign)}
+              </Text>
+            </View>
 
-                  <form onSubmit={handleCreateCampaignSubmit} className="space-y-3.5">
-                    <div className="space-y-2">
-                      <label className="block text-[8px] font-mono text-gray-400 uppercase tracking-widest font-semibold">
-                        Divine Aspiration Seed / Master Objective
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="E.g., Learn Guitar, Build Muscle, Learn React, Improve Sleep..."
-                        value={aspirationInput}
-                        onChange={(e) => setAspirationInput(e.target.value)}
-                        className="w-full bg-gothic-back border border-gothic-border/70 hover:border-gothic-gold focus:border-gothic-gold px-3.5 py-2.5 text-xs text-white rounded-lg focus:outline-none focus:ring-0 placeholder:text-gray-700 font-mono"
-                      />
-                    </div>
+            {/* Unlocks Panel */}
+            <View style={styles.unlocksRow}>
+              <View style={styles.unlocksBadge}>
+                <Text style={styles.unlocksSubLabel}>MASTERY CATALYSTS</Text>
+                <Text style={styles.unlocksLabel}>⚔️ Attribute Masteries</Text>
+              </View>
+              <View style={styles.unlocksBadge}>
+                <Text style={styles.unlocksSubLabel}>EVOLUTION INFLUENCE</Text>
+                <Text style={[styles.unlocksLabel, { color: COLORS.gothicSky }]}>💎 Level-Up XP Boost</Text>
+              </View>
+            </View>
 
-                    {planError && (
-                      <div className="p-2 bg-gothic-crimson/5 border border-gothic-crimson/25 text-gothic-crimson text-[8px] font-mono uppercase rounded">
-                        ⚠️ Oracle Failure: {planError}
-                      </div>
-                    )}
+            {/* Abandon Campaign Button */}
+            <View style={styles.abandonWrapper}>
+              <TouchableOpacity 
+                style={styles.abandonBtn}
+                onPress={() => handleAbandonCampaignClick(activeCampaign)}
+              >
+                <Trash2 size={12} color={COLORS.gothicCrimson} />
+                <Text style={styles.abandonBtnText}>ABANDON CRUSADE CAMPAIGN</Text>
+              </TouchableOpacity>
+            </View>
 
-                    <div className="space-y-1">
-                      <span className="block text-[7.5px] font-mono text-gray-500 uppercase tracking-widest font-semibold">Ready Aspiration Blueprints:</span>
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {['Learn Guitar', 'Build Muscle', 'Learn React', 'Improve Sleep', 'Become Disciplined'].map((tag) => (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={() => {
-                              soundEngine.playClick();
-                              setAspirationInput(tag);
-                            }}
-                            className="px-2.5 py-1 bg-gothic-back hover:bg-gothic-gold/15 text-gray-400 hover:text-white border border-gothic-border/60 hover:border-gothic-gold rounded font-mono text-[8px] uppercase transition-all cursor-pointer"
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+          </ScrollView>
+        </View>
+      )}
 
-                    <button
-                      type="submit"
-                      disabled={isPlanningLoading}
-                      className="w-full py-3 bg-gradient-to-r from-gothic-crimson to-red-800 text-white font-cinzel font-black tracking-widest text-[9.5px] uppercase rounded-lg border border-gothic-gold/25 cursor-pointer disabled:opacity-40 transition-all flex items-center justify-center gap-2"
-                    >
-                      {isPlanningLoading ? (
-                        <>
-                          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          COMMUNING WITH ANCIENT SAGES (AI)...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 text-gothic-gold animate-spin-slow animate-pulse" />
-                          [ Generate Campaign ]
-                        </>
-                      )}
-                    </button>
-                  </form>
-                </div>
-
-                <div className="border-t border-gothic-border/10 pt-3 text-gray-500 font-mono text-[7.5px] uppercase tracking-wider leading-relaxed">
-                  The AI analyzes thy goal and generates: <br />
-                  • Immersive 5-phase structured RPG roadmap <br />
-                  • Weekly focused objectives & task blueprints <br />
-                  • Personalized Strategist AI milestones & appraisals <br />
-                  • Skill progression indicators & attribute catalysts
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-    </div>
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  header: {
+    marginVertical: 12,
+  },
+  headerTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 1,
+  },
+  headerSubtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+    marginTop: 4,
+  },
+  tabContainer: {
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  tabsWrapper: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(10, 11, 13, 0.95)',
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.6)',
+    borderRadius: 12,
+    padding: 4,
+    width: '100%',
+    maxWidth: 320,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabActive: {
+    backgroundColor: 'rgba(200, 158, 92, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.4)',
+  },
+  tabText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    letterSpacing: 1,
+    fontWeight: 'bold',
+  },
+  tabTextActive: {
+    color: COLORS.gothicGold,
+  },
+  activePanel: {
+    marginVertical: 8,
+  },
+  subHeading: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  goalsGrid: {
+    gap: 12,
+  },
+  goalCard: {
+    backgroundColor: 'rgba(24, 26, 32, 0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.7)',
+    borderRadius: 12,
+    padding: 16,
+    position: 'relative',
+  },
+  cardCorner: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderColor: COLORS.gothicGold,
+    opacity: 0.3,
+  },
+  goalCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  goalCardHeaderText: {
+    flex: 1,
+  },
+  goalCardTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 12.5,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  goalCardCategory: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray400,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  progressBarWrapper: {
+    marginTop: 14,
+  },
+  progressBarBackground: {
+    width: '100%',
+    height: 4,
+    backgroundColor: '#000',
+    borderRadius: 2,
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(46, 50, 62, 0.2)',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: COLORS.gothicGold,
+  },
+  progressBarLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  progressLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+  },
+  goalCardFooter: {
+    marginTop: 12,
+    alignItems: 'flex-end',
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(46, 50, 62, 0.2)',
+    paddingTop: 8,
+  },
+  footerLinkText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  createPanel: {
+    gap: 16,
+  },
+  sectionCard: {
+    backgroundColor: COLORS.gothicCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    padding: 16,
+    position: 'relative',
+  },
+  sectionHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.2)',
+    paddingBottom: 8,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  sectionSubtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  textInput: {
+    width: '100%',
+    height: 38,
+    backgroundColor: COLORS.gothicDark,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    color: '#fff',
+    fontSize: 12.5,
+    fontFamily: FONTS.mono,
+  },
+  quickTaskSubmitBtn: {
+    width: '100%',
+    height: 36,
+    backgroundColor: COLORS.gothicGold,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  quickTaskSubmitBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9.5,
+    color: '#000',
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  examplesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  exampleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    backgroundColor: COLORS.gothicDark,
+  },
+  exampleBadgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+  },
+  noTasksText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray600,
+    textAlign: 'center',
+    paddingVertical: 12,
+    textTransform: 'uppercase',
+  },
+  quickTasksList: {
+    gap: 6,
+  },
+  quickTaskItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderWidth: 0.5,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    padding: 8,
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  smallCheckbox: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: COLORS.gray600,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickTaskTitleText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9.5,
+    color: COLORS.gray300,
+    flex: 1,
+    textTransform: 'uppercase',
+  },
+  inputWrapper: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray400,
+    letterSpacing: 0.5,
+  },
+  planErrorBox: {
+    backgroundColor: 'rgba(164, 44, 56, 0.1)',
+    borderColor: 'rgba(164, 44, 56, 0.3)',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 8,
+    marginVertical: 4,
+  },
+  planErrorText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicCrimson,
+    textTransform: 'uppercase',
+  },
+  campaignSubmitBtn: {
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: COLORS.gothicCrimson,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  campaignSubmitContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  campaignSubmitBtnText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10, 11, 13, 0.96)',
+    zIndex: 1000,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.3)',
+    paddingBottom: 12,
+    marginBottom: 16,
+    marginTop: Platform.OS === 'ios' ? 24 : 8,
+  },
+  modalHeaderCategory: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+  },
+  modalHeaderTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    maxWidth: 180,
+  },
+  modalCloseBtn: {
+    backgroundColor: 'rgba(200, 158, 92, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+  },
+  modalCloseBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  statusBox: {
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statusBoxSubText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+  },
+  statusBoxText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  statusBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  statusBadgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: '#10b981',
+    fontWeight: 'bold',
+  },
+  hudPanel: {
+    backgroundColor: 'rgba(10, 11, 13, 0.7)',
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  hudPanelCol: {
+    flex: 1,
+  },
+  hudBorderCol: {
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(46, 50, 62, 0.3)',
+    paddingLeft: 8,
+  },
+  hudLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+  },
+  hudValue: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 2,
+  },
+  hudSubLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    color: COLORS.gray600,
+    marginTop: 2,
+  },
+  hudProgressBarBg: {
+    width: '100%',
+    height: 3,
+    backgroundColor: '#000',
+    borderRadius: 1.5,
+    overflow: 'hidden',
+  },
+  hudProgressBarFill: {
+    height: '100%',
+    backgroundColor: COLORS.gothicGold,
+  },
+  milestoneSection: {
+    marginBottom: 16,
+  },
+  milestoneHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  milestoneHeaderTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  stageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  stageGridBtn: {
+    width: '18%',
+    flexGrow: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    padding: 6,
+    alignItems: 'center',
+  },
+  stageGridName: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 8.5,
+    fontWeight: 'bold',
+    color: COLORS.gray400,
+    textTransform: 'uppercase',
+  },
+  stageGridStatus: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  blueprintAlertCard: {
+    backgroundColor: 'rgba(251, 146, 60, 0.05)',
+    borderColor: 'rgba(251, 146, 60, 0.2)',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+    marginBottom: 16,
+  },
+  blueprintAlertTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  blueprintAlertSubtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray400,
+    textTransform: 'uppercase',
+    lineHeight: 11,
+  },
+  blueprintAlertActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  startDateInput: {
+    flex: 1,
+    height: 30,
+    backgroundColor: '#000',
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    color: '#fff',
+    fontSize: 11,
+    fontFamily: FONTS.mono,
+  },
+  carveBtn: {
+    backgroundColor: 'rgba(200, 158, 92, 0.2)',
+    borderColor: 'rgba(200, 158, 92, 0.4)',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  carveBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  objectivesSection: {
+    marginBottom: 16,
+  },
+  objectivesHeaderTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  objectiveCard: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.3)',
+    borderRadius: 10,
+    padding: 10,
+  },
+  objectiveHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  objectiveTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9.5,
+    fontWeight: 'bold',
+    color: COLORS.gray300,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  objectiveDiffBadge: {
+    fontFamily: FONTS.mono,
+    fontSize: 6.5,
+    color: COLORS.gray500,
+    borderWidth: 0.5,
+    borderColor: 'rgba(46, 50, 62, 0.3)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  lockBadge: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  objectiveCheckbox: {
+    width: 15,
+    height: 15,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: COLORS.gray600,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  objectiveExpanded: {
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(46, 50, 62, 0.2)',
+    marginTop: 8,
+    paddingTop: 8,
+    gap: 4,
+  },
+  expandedLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  expandedDesc: {
+    fontFamily: FONTS.sans,
+    fontSize: 11,
+    color: COLORS.gray400,
+    lineHeight: 14,
+  },
+  expandedFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  xpText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  cleanseBtn: {
+    backgroundColor: 'rgba(200, 158, 92, 0.15)',
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  cleanseBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  advisorCard: {
+    backgroundColor: 'rgba(200, 158, 92, 0.05)',
+    borderColor: COLORS.gothicBorder,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  advisorHeaderTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  advisorText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray400,
+    lineHeight: 13,
+    textTransform: 'uppercase',
+  },
+  unlocksRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  unlocksBadge: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(46, 50, 62, 0.3)',
+    borderRadius: 10,
+    padding: 8,
+  },
+  unlocksSubLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 6.5,
+    color: COLORS.gray600,
+  },
+  unlocksLabel: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9.5,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    marginTop: 2,
+    textTransform: 'uppercase',
+  },
+  abandonWrapper: {
+    alignItems: 'flex-end',
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(46, 50, 62, 0.3)',
+    paddingTop: 12,
+  },
+  abandonBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(164, 44, 56, 0.08)',
+    borderColor: 'rgba(164, 44, 56, 0.3)',
+    borderWidth: 1,
+    borderRadius: 4,
+  },
+  abandonBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gothicCrimson,
+    fontWeight: 'bold',
+  }
+});

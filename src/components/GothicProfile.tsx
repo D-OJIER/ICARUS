@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  ScrollView, 
+  TextInput, 
+  StyleSheet, 
+  Dimensions, 
+  ActivityIndicator,
+  Alert
+} from 'react-native';
 import { 
   User, 
   Trophy, 
-  Search, 
   TrendingUp, 
   ShieldAlert, 
   Compass, 
@@ -14,33 +23,27 @@ import {
   Sparkles, 
   CheckCircle2, 
   Award,
-  History,
   Activity,
-  ChevronRight,
-  Flame,
-  CornerDownRight,
-  RefreshCw,
   MessageSquare,
-  Bookmark,
-  GitCommit,
-  Brain,
+  RefreshCw,
+  Search,
   SlidersHorizontal,
   ChevronDown
-} from 'lucide-react';
+} from 'lucide-react-native';
 import { 
   CharacterProfile, 
   calculateLevelInfo, 
-  unlockSkillNode, 
   reconcileNodeAvailability,
   addChronicleLog, 
-  saveCharacterProfile,
   calculateActualStreak,
-  calculateLongestStreak
+  calculateLongestStreak 
 } from '../utils/progressionUtils';
 import { Quest, Goal } from '../types';
 import { getTodayLocalDateString } from '../utils/dateUtils';
 import { soundEngine } from '../utils/audio';
 import { ProceduralAvatar } from './ProceduralAvatar';
+import { generateProfileAssessment, getApiKey } from '../utils/aiEngine';
+import { COLORS, FONTS } from '../theme';
 
 interface GothicProfileProps {
   quests: Quest[];
@@ -63,19 +66,15 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
   onReset,
   tab
 }) => {
-  const [chronicleSearch, setChronicleSearch] = useState('');
-  const [activeTreeCategory, setActiveTreeCategory] = useState<'Programming' | 'Fitness' | 'Personal Development'>('Programming');
-  const [isAssessing, setIsAssessing] = useState(false);
-  const [assessmentResult, setAssessmentResult] = useState<string | null>(null);
-
-  // Redesigned Skills Tab States
   const [activeSkillTab, setActiveSkillTab] = useState<'growing' | 'mastered'>('growing');
   const [skillSearch, setSkillSearch] = useState('');
   const [skillDomainFilter, setSkillDomainFilter] = useState('All Domains');
   const [skillSortBy, setSkillSortBy] = useState<'level' | 'active' | 'recently_unlocked' | 'mastery' | 'confidence'>('level');
   const [selectedSkill, setSelectedSkill] = useState<any | null>(null);
 
-  // Dynamic Skill recognition engine
+  const [isAssessing, setIsAssessing] = useState(false);
+  const [assessmentResult, setAssessmentResult] = useState<string | null>(null);
+
   const getRecognizedSkills = () => {
     const savedGoals = goals || [];
 
@@ -288,7 +287,6 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
       return keywords.some(k => lower.includes(k));
     };
 
-    // Keep track of which goals were mapped so we don't duplicate
     const mappedGoalIds = new Set<string>();
 
     const recognizedSkills = SKILLS_REGISTRY.map(reg => {
@@ -316,22 +314,19 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
       );
 
       const completedMatchingCampaigns = savedGoals.filter(g => {
-        const matches = (g.status === 'Triumphant' || g.completed) && 
+        const matches = g.status === 'Triumphant' && 
           (checkMatch(g.title, reg.keywords) || checkMatch(g.aspiration, reg.keywords));
         if (matches) mappedGoalIds.add(g.id);
         return matches;
       });
 
       const activeMatchingCampaigns = savedGoals.filter(g => {
-        const matches = g.status === 'In Quest' && !g.completed &&
+        const matches = g.status === 'In Quest' && 
           (checkMatch(g.title, reg.keywords) || checkMatch(g.aspiration, reg.keywords));
         if (matches) mappedGoalIds.add(g.id);
         return matches;
       });
 
-      // AI Discovery Rule: Unlocked Node OR Quest (Active/Completed) OR Campaign (Active/Completed)
-      // Display ONLY real, earned or actively/intentionally pursuing skills.
-      // Do not display if absolutely no evidence.
       const hasCompletedQuests = completedMatchingQuests.length > 0;
       const hasCompletedCampaigns = completedMatchingCampaigns.length > 0;
       const hasActiveQuests = activeMatchingQuests.length > 0;
@@ -341,10 +336,7 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
 
       if (!hasEvidence) return null;
 
-      // Base Level begins at 1
       let level = 1;
-      
-      // Calculate levels
       level += completedMatchingCampaigns.length * 5;
       level += activeMatchingCampaigns.length * 1;
       level += completedMatchingQuests.length * 2;
@@ -353,10 +345,8 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
         level += nodeLevel > 0 ? nodeLevel : 2;
       }
 
-      // Check if user has ONLY active things without any completion
       const isPurelyDiscovered = (completedMatchingQuests.length === 0 && completedMatchingCampaigns.length === 0 && !nodeUnlocked);
 
-      // Status lifecycle matching: Discovered -> Practicing -> Developing -> Proficient -> Advanced -> Mastered
       let status: 'Discovered' | 'Practicing' | 'Developing' | 'Proficient' | 'Advanced' | 'Mastered' = 'Discovered';
       let mastery = 0;
 
@@ -380,9 +370,6 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
         mastery = Math.min(10 + (level - 2) * 5, 25);
       }
 
-      // Tab mapping:
-      // - Mastered status maps to 'mastered' tab
-      // - Discovered, Practicing, Developing, Proficient, Advanced map to 'growing' tab (originally practicing)
       const tabGroup: 'growing' | 'mastered' = (status === 'Mastered') ? 'mastered' : 'growing';
 
       let aiConfidence = "HIGH";
@@ -405,7 +392,6 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
       }
       assessmentText += ` Recommended focus: ${reg.recommendation}`;
 
-      // Source Name
       let sourceName = "Demonstrated Habits & Duties";
       if (activeMatchingCampaigns.length > 0) {
         sourceName = `${activeMatchingCampaigns[0].title} Campaign`;
@@ -436,16 +422,13 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
       };
     }).filter((s): s is NonNullable<typeof s> => s !== null);
 
-    // Dynamic custom skills mapper: Map any campaign (goal) that wasn't mapped above directly!
     savedGoals.forEach(g => {
       if (!g) return;
-      if (mappedGoalIds.has(g.id)) return; // Already covered!
+      if (mappedGoalIds.has(g.id)) return;
 
-      // Generate a clean skill name
       const skillName = g.title.length > 25 ? g.aspiration || g.title : g.title;
       const skillId = `custom-sc-${g.id}`;
 
-      // Map domain
       let sDomain = g.categoryName || "Lifestyle";
       const availableDomains = ["Programming", "Fitness", "Learning", "Productivity", "Creativity", "Business", "Communication", "Health", "Lifestyle", "Music"];
       const foundDom = availableDomains.find(d => d.toLowerCase() === sDomain.toLowerCase() || sDomain.toLowerCase().includes(d.toLowerCase()));
@@ -455,7 +438,6 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
         sDomain = "Lifestyle";
       }
 
-      // Check quests matching this custom title
       const cleanCustomWords = skillName.toLowerCase().split(' ').filter(w => w.length > 3);
       const customKeywords = [skillName.toLowerCase(), ...cleanCustomWords];
       
@@ -466,8 +448,8 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
         !q.completed && (checkMatch(q.title, customKeywords) || checkMatch(q.description, customKeywords))
       );
 
-      const isActiveGoal = g.status === 'In Quest' && !g.completed;
-      const isCompletedGoal = g.status === 'Triumphant' || g.completed === true;
+      const isActiveGoal = g.status === 'In Quest';
+      const isCompletedGoal = g.status === 'Triumphant';
 
       let level = 1;
       if (isCompletedGoal) level += 5;
@@ -535,29 +517,12 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
     return recognizedSkills;
   };
 
-  // Global quest and habit metrics
-  const activeQuests = quests.filter(q => !q.completed);
   const completedQuests = quests.filter(q => q.completed);
   const completedCount = completedQuests.length;
-  const totalCount = quests.length;
-  const activeCount = activeQuests.length;
-
   const currentStreak = calculateActualStreak(quests);
   const longestStreak = calculateLongestStreak(quests);
-
-  // Level Information calculated
   const levelInfo = calculateLevelInfo(profile.xp);
 
-  // Filter chronic entries
-  const filteredChronicle = profile.chronicle.map(entry => {
-    const hits = entry.bullets.filter(b => 
-      b.toLowerCase().includes(chronicleSearch.toLowerCase()) || 
-      entry.timeframe.toLowerCase().includes(chronicleSearch.toLowerCase())
-    );
-    return { ...entry, bullets: hits };
-  }).filter(entry => entry.bullets.length > 0);
-
-  // Auto assign level ranks
   let curRank = 'Pilgrim';
   if (levelInfo.level >= 45) {
     curRank = 'Master of Virtues';
@@ -569,43 +534,36 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
     curRank = 'Pathfinder';
   }
 
-  // Trigger conversational review with Master Scribe
   const handleTriggerAIAssessment = async () => {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      soundEngine.playSlash();
+      Alert.alert("Oracle Status", "AI is unavailable. Please come back later.");
+      return;
+    }
+
     setIsAssessing(true);
     setAssessmentResult(null);
     soundEngine.playSoulsClaimed();
 
-    const activeHabitsCount = quests.filter(q => q.category === 'Habit' && !q.completed).length;
     const completedQuestsList = quests.filter(q => q.completed);
 
     try {
-      const response = await fetch('/api/ai/profile-assess', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: profile.name,
-          title: profile.title,
-          xp: profile.xp,
-          stats: profile.stats,
-          chronicle: profile.chronicle,
-          unlockedSkillsCount: profile.skillTrees.flatMap(t => t.nodes).filter(n => n.status === 'unlocked').length,
-          unlockedAchievementsCount: profile.achievements.filter(a => a.unlocked).length,
-          completedQuests: completedQuestsList
-        })
+      const res = await generateProfileAssessment({
+        name: profile.name,
+        title: profile.title,
+        xp: profile.xp,
+        stats: profile.stats,
+        chronicle: profile.chronicle,
+        unlockedSkillsCount: profile.skillTrees.flatMap(t => t.nodes).filter(n => n.status === 'unlocked').length,
+        unlockedAchievementsCount: profile.achievements.filter(a => a.unlocked).length,
+        completedQuests: completedQuestsList
       });
 
-      if (!response.ok) throw new Error('Void interference from oracle');
-      
-      const res = await response.json();
-      
-      // Update local profile with suggestions
       const updated = { ...profile };
-      
-      // Update assessment cache
       updated.lastAssessment = res.assessment;
       updated.lastAssessmentDate = getTodayLocalDateString();
 
-      // Automatically award and activate the recommended title
       if (res.recommendedTitle) {
         updated.title = res.recommendedTitle;
         if (!updated.earnedTitles.includes(res.recommendedTitle)) {
@@ -613,7 +571,6 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
         }
       }
 
-      // Add stat boosts
       if (res.statBoosts) {
         for (const [key, val] of Object.entries(res.statBoosts)) {
           const sKey = key as keyof typeof updated.stats;
@@ -623,7 +580,6 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
         }
       }
 
-      // Process automated node unlocks dictated by the AI Game Master
       let newlyUnlockedNodes: string[] = [];
       if (res.unlockedNodeIds && Array.isArray(res.unlockedNodeIds)) {
         for (const nodeId of res.unlockedNodeIds) {
@@ -639,7 +595,6 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
         reconcileNodeAvailability(updated.skillTrees);
       }
 
-      // Add chronicle log of assessment review
       const statChangesStr = Object.entries(res.statBoosts || {})
         .map(([k, v]) => `+${v} ${k.toUpperCase()}`)
         .join(', ');
@@ -655,771 +610,1195 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
       soundEngine.playSoulsClaimed();
 
     } catch (err) {
-      console.error('AI Profile assessment failure:', err);
-      // Fallback
-      const updated = { ...profile };
-      updated.lastAssessment = "Thy grit continues to withstand the weight of daily vows. Strengthen thy resolve in Programming to unlock higher tiers.";
-      updated.lastAssessmentDate = getTodayLocalDateString();
-      
-      updated.stats.discipline = Math.min(updated.stats.discipline + 2, 100);
-      updated.stats.programming = Math.min(updated.stats.programming + 1, 100);
-
-      const fallbackTitle = "The Consistent";
-      updated.title = fallbackTitle;
-      if (!updated.earnedTitles.includes(fallbackTitle)) {
-        updated.earnedTitles.push(fallbackTitle);
-      }
-
-      // Try unlocking fundamental programming as a fallback
-      for (const tree of updated.skillTrees) {
-        const node = tree.nodes.find(n => n.id === 'prog-fund');
-        if (node && node.status !== 'unlocked') {
-          node.status = 'unlocked';
-          node.level = 1;
-        }
-      }
-      reconcileNodeAvailability(updated.skillTrees);
-
-      addChronicleLog(updated, "Completed periodic mental evaluation. Awarded +2 Discipline, +1 Programming. Formulated title 'The Consistent' and unlocked Programming Fundamentals.");
-      
-      onUpdateProfile(updated);
-      setAssessmentResult(`[Offline Alchemy Check] Vows Audited!\n\n"Thy grit continues to withstand the weight of daily vows. Strengthen thy resolve in Programming to unlock higher tiers."\n\nStat Boosts Applied: +2 Discipline, +1 Programming\nTitle Earned: "The Consistent"`);
-      soundEngine.playSoulsClaimed();
+      console.warn('AI assessment failure:', err);
+      Alert.alert("Oracle Status", "AI is unavailable. Please come back later.");
     } finally {
       setIsAssessing(false);
     }
   };
 
-  // Attempt to unlock a node - Now blocked to force AI-authority unlocks!
-  const handleNodeClick = (nodeId: string) => {
-    soundEngine.playSlash(); // Play fail swipe
-    alert("❌ HOLY COVENANT BOUND: Thy may not unlock skill tree nodes manually! The Grand Mentor Scribe controls progression. Deliver thy evidence of completed quests and habits, then click 'AUDIT PILGRIMS LEDGER' above to let the AI evaluate thy growth and unlock skill pathways.");
+  const getStatusBadgeStyle = (status: string) => {
+    switch (status) {
+      case 'Discovered': return { color: '#94a3b8', borderColor: 'rgba(148, 163, 184, 0.2)', backgroundColor: 'rgba(148, 163, 184, 0.05)' };
+      case 'Practicing': return { color: '#fb923c', borderColor: 'rgba(251, 146, 60, 0.2)', backgroundColor: 'rgba(251, 146, 60, 0.05)' };
+      case 'Developing': return { color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.2)', backgroundColor: 'rgba(56, 189, 248, 0.05)' };
+      case 'Proficient': return { color: '#818cf8', borderColor: 'rgba(129, 140, 248, 0.2)', backgroundColor: 'rgba(129, 140, 248, 0.05)' };
+      case 'Advanced': return { color: '#c084fc', borderColor: 'rgba(192, 132, 252, 0.2)', backgroundColor: 'rgba(192, 132, 252, 0.05)' };
+      case 'Mastered': return { color: '#34d399', borderColor: 'rgba(52, 211, 153, 0.2)', backgroundColor: 'rgba(52, 211, 153, 0.05)' };
+      default: return { color: COLORS.gothicGold, borderColor: 'rgba(200, 158, 92, 0.2)', backgroundColor: 'rgba(200, 158, 92, 0.05)' };
+    }
   };
 
+  const detectedList = getRecognizedSkills();
+  const filteredList = detectedList.filter(s => {
+    const matchesTab = s.tabGroup === activeSkillTab;
+    const matchesSearch = s.name.toLowerCase().includes(skillSearch.toLowerCase()) || 
+                          s.description.toLowerCase().includes(skillSearch.toLowerCase());
+    const matchesDomain = skillDomainFilter === 'All Domains' ? true : s.domain === skillDomainFilter;
+    return matchesTab && matchesSearch && matchesDomain;
+  });
+
+  const sortedList = [...filteredList].sort((a, b) => {
+    if (skillSortBy === 'level') return b.level - a.level;
+    if (skillSortBy === 'mastery') return b.mastery - a.mastery;
+    if (skillSortBy === 'active') {
+      if (a.recentActivity && !b.recentActivity) return -1;
+      if (!a.recentActivity && b.recentActivity) return 1;
+      return b.level - a.level;
+    }
+    if (skillSortBy === 'recently_unlocked') return b.evidenceList.length - a.evidenceList.length;
+    if (skillSortBy === 'confidence') {
+      const confIndex: Record<string, number> = { "ABSOLUTE": 3, "HIGH": 2, "MODERATE": 1 };
+      return confIndex[b.aiConfidence] - confIndex[a.aiConfidence];
+    }
+    return 0;
+  });
+
   return (
-    <div className="space-y-8" id="gothic-rpg-character-sheet">
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       
       {/* 1. CHARACTER CARD & PROFILE OVERVIEW HEADER */}
       {tab === 'The Wanderer' && (
-        <div className="p-6 bg-gothic-card rounded-2xl border border-gothic-border relative overflow-hidden" id="character-ledger-card">
-          <div className="absolute top-0 right-0 w-32 h-32 opacity-[0.02] pointer-events-none">
-            <User className="w-full h-full text-white" />
-          </div>
+        <View style={styles.card}>
+          <View style={styles.avatarRow}>
+            <View style={styles.avatarContainer}>
+              <ProceduralAvatar profile={profile} size={110} />
+              <View style={styles.levelBadge}>
+                <Text style={styles.levelBadgeText}>LVL {levelInfo.level}</Text>
+              </View>
+            </View>
 
-          <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
-            {/* Left info */}
-            <div className="flex flex-col items-center md:items-start text-center md:text-left">
-              <div className="relative mb-3 flex justify-center">
-                <ProceduralAvatar profile={profile} size={150} />
-                <div className="absolute bottom-1 right-1/2 translate-x-1/2 bg-gradient-to-b from-yellow-300 via-gothic-gold to-yellow-600 text-black text-[8px] font-mono px-2 py-0.5 rounded border border-yellow-200/40 font-black tracking-wider shadow-[0_0_15px_rgba(200,158,92,0.6)] uppercase">
-                  Lvl {levelInfo.level}
-                </div>
-              </div>
+            <View style={styles.avatarDetails}>
+              <Text style={styles.characterName}>{profile.name.toUpperCase()}</Text>
+              <Text style={styles.rankBadge}>{curRank.toUpperCase()}</Text>
+              <Text style={styles.characterTitle}>† {profile.title.toUpperCase()} †</Text>
+            </View>
+          </View>
 
-              <h1 className="font-cinzel text-xl font-bold tracking-wide text-white uppercase flex items-center gap-2">
-                {profile.name}
-                <span className="text-[9px] border border-gothic-border/60 px-2 py-0.5 font-mono text-gray-400 bg-gothic-back/40 font-normal">
-                  {curRank}
-                </span>
-              </h1>
+          {/* Experience Bar */}
+          <View style={styles.xpBlock}>
+            <View style={styles.xpRow}>
+              <Text style={styles.xpLabel}>EXP. POINTS</Text>
+              <Text style={styles.xpValue}>
+                {levelInfo.xpInCurrentLevel} / {levelInfo.xpNeededForNextLevel} XP ({profile.xp} TOTAL)
+              </Text>
+            </View>
+            <View style={styles.xpTrack}>
+              <View style={[styles.xpFill, { width: `${levelInfo.progressPercentage}%` }]} />
+            </View>
+          </View>
 
-              <p className="font-cinzel text-[10.5px] font-medium text-gothic-gold tracking-widest mt-1 uppercase">
-                † {profile.title} †
-              </p>
+          {/* Titles list */}
+          <View style={styles.titlesRow}>
+            <Text style={styles.titlesHeading}>SCROLLS OF HONORS:</Text>
+            <View style={styles.titlesList}>
+              {profile.earnedTitles.map(t => (
+                <View key={t} style={[styles.titlePill, profile.title === t && styles.titlePillActive]}>
+                  <Text style={[styles.titlePillText, profile.title === t && { color: COLORS.gothicGold }]}>
+                    {profile.title === t ? '🛡️ ' : '📜 '} {t.toUpperCase()}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
 
-              {/* Earned Titles Showcase - Informative indicator, non-customizable */}
-              <div className="mt-4 text-left">
-                <span className="text-[7.5px] font-mono text-gray-500 uppercase tracking-widest block mb-1">
-                  Bestowed Scrolls of Honor:
-                </span>
-                <div className="flex flex-wrap gap-1.5 max-w-sm">
-                  {profile.earnedTitles.map((t) => (
-                    <span 
-                      key={t}
-                      className={`px-2 py-0.5 rounded font-mono text-[8px] uppercase tracking-wider border ${
-                        profile.title === t 
-                          ? 'bg-gothic-gold/20 text-gothic-gold border-gothic-gold/50 font-bold shadow-[0_0_8px_rgba(200,158,92,0.25)]' 
-                          : 'bg-gothic-back/40 text-gray-500 border-gothic-border/20'
-                      }`}
-                    >
-                      {t === profile.title ? '🛡 ' : '📜 '} {t}
-                    </span>
-                  ))}
-                </div>
-                <span className="text-[7px] font-mono text-gray-600 italic block mt-1.5 uppercase">
-                  * Titles and honors are granted solely by the AI Mentor's assessments.
-                </span>
-              </div>
-            </div>
-
-            {/* Right level / experience parameters block */}
-            <div className="w-full md:w-72 space-y-2">
-              <div className="flex justify-between items-end text-[9px] font-mono uppercase">
-                <span className="text-gray-500">Exp. points</span>
-                <span className="text-gothic-gold font-bold">
-                  {levelInfo.xpInCurrentLevel} / {levelInfo.xpNeededForNextLevel} XP ({profile.xp} Total)
-                </span>
-              </div>
-
-              <div className="h-2 bg-gothic-back border border-gothic-border/40 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-yellow-700 via-gothic-gold to-yellow-500 transition-all duration-500"
-                  style={{ width: `${levelInfo.progressPercentage}%` }}
-                />
-              </div>
-
-              <p className="text-[7.5px] font-mono text-gray-500 text-right uppercase tracking-widest leading-normal">
-                Accumulate XP to climb levels and unlock forbidden skill covenants.
-              </p>
-            </div>
-          </div>
-
-          {/* PROGRESS METRICS HUD MATRIX */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-gothic-border/15">
-            <div className="p-3 bg-gothic-back/30 border border-gothic-border/10 rounded-xl text-center">
-              <span className="text-[16px] font-mono text-gothic-sky font-bold block leading-none">
-                {goalsCount}
-              </span>
-              <span className="text-[8px] font-mono text-gray-500 uppercase tracking-widest block mt-1">
-                Active Goals
-              </span>
-            </div>
-
-            <div className="p-3 bg-gothic-back/30 border border-gothic-border/10 rounded-xl text-center">
-              <span className="text-[16px] font-mono text-gothic-gold font-bold block leading-none">
-                {quests.filter(q => q.category === 'Habit').length}
-              </span>
-              <span className="text-[8px] font-mono text-gray-500 uppercase tracking-widest block mt-1">
-                Active Habits
-              </span>
-            </div>
-
-            <div className="p-3 bg-gothic-back/30 border border-gothic-border/10 rounded-xl text-center">
-              <span className="text-[16px] font-mono text-green-500 font-bold block leading-none">
-                {completedCount}
-              </span>
-              <span className="text-[8px] font-mono text-gray-500 uppercase tracking-widest block mt-1">
-                Completed Quests
-              </span>
-            </div>
-
-            <div className="p-3 bg-gothic-back/40 border border-gothic-crimson/25 rounded-xl text-center shadow-[inset_0_0_8px_rgba(154,23,23,0.15),_0_0_15px_rgba(154,23,23,0.1)] hover:border-gothic-crimson/40 transition-colors duration-300">
-              <span className="text-[16px] font-mono text-gothic-crimson font-bold block leading-none drop-shadow-[0_0_4px_rgba(154,23,23,0.4)] animate-pulse-blood">
-                {longestStreak} Days
-              </span>
-              <span className="text-[8px] font-mono text-gothic-crimson/70 uppercase tracking-widest block mt-1 font-semibold">
-                Longest Streak
-              </span>
-            </div>
-          </div>
-        </div>
+          {/* Metrics HUD Grid */}
+          <View style={styles.hudGrid}>
+            <View style={styles.hudItem}>
+              <Text style={styles.hudValText}>{goalsCount}</Text>
+              <Text style={styles.hudLblText}>ACTIVE GOALS</Text>
+            </View>
+            <View style={styles.hudItem}>
+              <Text style={styles.hudValText}>{quests.filter(q => q.category === 'Habit').length}</Text>
+              <Text style={styles.hudLblText}>ACTIVE HABITS</Text>
+            </View>
+            <View style={styles.hudItem}>
+              <Text style={[styles.hudValText, { color: COLORS.gothicSky }]}>{completedCount}</Text>
+              <Text style={styles.hudLblText}>COMPLETED</Text>
+            </View>
+            <View style={[styles.hudItem, { borderColor: COLORS.gothicCrimson }]}>
+              <Text style={[styles.hudValText, { color: COLORS.gothicCrimson }]}>{longestStreak} DAYS</Text>
+              <Text style={[styles.hudLblText, { color: COLORS.gothicCrimson }]}>LONGEST STREAK</Text>
+            </View>
+          </View>
+        </View>
       )}
 
       {/* 2. DYNAMIC REALIZED SKILLS LEDGER */}
       {tab === 'The Codex' && (
-        <>
-          <div className="p-4 sm:p-5 md:p-6 bg-gothic-card rounded-2xl border border-gothic-border relative overflow-hidden" id="skill-tree-complex">
-        <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-gothic-gold/30" />
-        <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-gothic-gold/30" />
-        <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-gothic-gold/30" />
-        <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-gothic-gold/30" />
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <View>
+              <Text style={styles.cardHeaderTitle}>⚔️ REALIZED COVENANTS OF GROWTH</Text>
+              <Text style={styles.cardHeaderSubtitle}>Demonstrated skills & dynamic attributes</Text>
+            </View>
+            
+            {/* Growing/Mastered Tab Selectors */}
+            <View style={styles.subTabRow}>
+              <TouchableOpacity onPress={() => { soundEngine.playClick(); setActiveSkillTab('growing'); }} style={[styles.subTabBtn, activeSkillTab === 'growing' && styles.subTabActive]}>
+                <Text style={[styles.subTabBtnText, activeSkillTab === 'growing' && { color: COLORS.gothicGold }]}>[ GROWING ]</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { soundEngine.playClick(); setActiveSkillTab('mastered'); }} style={[styles.subTabBtn, activeSkillTab === 'mastered' && styles.subTabActive]}>
+                <Text style={[styles.subTabBtnText, activeSkillTab === 'mastered' && { color: COLORS.gothicGold }]}>[ MASTERED ]</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-        <div className="space-y-5">
-          {/* Header & Main Core Navigation */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gothic-border/20 pb-4">
-            <div className="space-y-1">
-              <h2 className="font-cinzel text-xs font-bold tracking-widest text-gothic-gold uppercase flex items-center gap-1.5">
-                <Brain className="w-4 h-4 text-gothic-gold animate-pulse text-shrink-0" />
-                Realized Covenants of Growth
-              </h2>
-              <p className="text-[7.5px] font-mono text-gray-500 uppercase tracking-widest leading-none">
-                Verified attributes & demonstrated dynamic skills
-              </p>
-            </div>
-
-            {/* RPG Top Navigation Tab Selector */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setActiveSkillTab('growing');
-                  soundEngine.playClick();
-                }}
-                className={`px-3 py-1 bg-gothic-back/40 font-mono text-[9px] font-medium uppercase tracking-widest transition-all rounded border ${
-                  activeSkillTab === 'growing'
-                    ? 'text-gothic-gold border-gothic-gold/50 bg-gothic-gold/5 shadow-[0_0_12px_rgba(200,158,92,0.1)]'
-                    : 'text-gray-500 border-transparent hover:text-gray-300'
-                }`}
-                title="Skills currently being active and growing (Discovered, Practicing, Developing, Proficient, Advanced)"
-              >
-                [ Growing ]
-              </button>
-              <button
-                onClick={() => {
-                  setActiveSkillTab('mastered');
-                  soundEngine.playClick();
-                }}
-                className={`px-3 py-1 bg-gothic-back/40 font-mono text-[9px] font-medium uppercase tracking-widest transition-all rounded border ${
-                  activeSkillTab === 'mastered'
-                    ? 'text-gothic-gold border-gothic-gold/50 bg-gothic-gold/5 shadow-[0_0_12px_rgba(200,158,92,0.1)]'
-                    : 'text-gray-500 border-transparent hover:text-gray-300'
-                }`}
-                title="Subconscious masteries finalized into permanent covenants of absolute capability"
-              >
-                [ Mastered ]
-              </button>
-            </div>
-          </div>
-
-          {/* Search, Domain Filters & Sort Controls Bar */}
-          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-gothic-back/50 p-2.5 rounded-xl border border-gothic-border/10">
-            {/* Search inputs */}
-            <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search recognized skills..."
+          {/* Search, Filter & Sort Row */}
+          <View style={styles.filtersContainer}>
+            <View style={styles.searchWrap}>
+              <Search size={12} color={COLORS.gray500} style={styles.searchIcon} />
+              <TextInput
                 value={skillSearch}
-                onChange={(e) => setSkillSearch(e.target.value)}
-                className="w-full bg-gothic-back/90 text-white font-mono text-[9.5px] uppercase tracking-wider pl-8 pr-3 py-1.5 rounded-lg border border-gothic-border/20 placeholder-gray-650 focus:outline-none focus:border-gothic-gold/40 focus:ring-1 focus:ring-gothic-gold/10 transition-all font-semibold"
+                onChangeText={setSkillSearch}
+                placeholder="SEARCH RECOGNIZED SKILLS..."
+                placeholderTextColor={COLORS.gray700}
+                style={styles.searchInput}
               />
-            </div>
+            </View>
 
-            {/* Dropdowns group */}
-            <div className="flex gap-2">
-              {/* Domain Switcher */}
-              <div className="relative flex-1 sm:flex-initial min-w-[110px]">
-                <select
-                  value={skillDomainFilter}
-                  onChange={(e) => {
-                    setSkillDomainFilter(e.target.value);
-                    soundEngine.playClick();
-                  }}
-                  className="w-full bg-gothic-back/95 text-gothic-gold font-mono text-[8.5px] uppercase tracking-widest pl-2.5 pr-8 py-1.5 rounded-lg border border-gothic-border/20 appearance-none focus:outline-none focus:border-gothic-gold/40 cursor-pointer text-center font-bold"
+            {/* Horizontal selection lists instead of dropdowns for premium mobile styling */}
+            <Text style={styles.filterTitleLabel}>DOMAINS:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsScroll}>
+              {["All Domains", "Programming", "Fitness", "Music", "Communication", "Learning", "Productivity", "Creativity", "Lifestyle"].map(d => (
+                <TouchableOpacity
+                  key={d}
+                  onPress={() => { soundEngine.playClick(); setSkillDomainFilter(d); }}
+                  style={[styles.filterPill, skillDomainFilter === d && styles.filterPillActive]}
                 >
-                  {["All Domains", "Programming", "Fitness", "Music", "Communication", "Learning", "Productivity", "Creativity", "Lifestyle"].map((dom) => (
-                    <option key={dom} value={dom} className="bg-gothic-card text-white font-semibold">
-                      {dom}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3 h-3 text-gothic-gold absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80" />
-              </div>
+                  <Text style={[styles.filterPillText, skillDomainFilter === d && { color: COLORS.gothicGold }]}>
+                    {d.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-              {/* Sort selector dropdown */}
-              <div className="relative flex-1 sm:flex-initial min-w-[125px]">
-                <select
-                  value={skillSortBy}
-                  onChange={(e) => {
-                    setSkillSortBy(e.target.value as any);
-                    soundEngine.playClick();
-                  }}
-                  className="w-full bg-gothic-back/95 text-gothic-gold font-mono text-[8.5px] uppercase tracking-widest pl-2.5 pr-8 py-1.5 rounded-lg border border-gothic-border/20 appearance-none focus:outline-none focus:border-gothic-gold/40 cursor-pointer text-center font-bold"
+            <Text style={styles.filterTitleLabel}>SORT BY:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsScroll}>
+              {[
+                { k: 'level', l: 'Tier Level ⚔️' },
+                { k: 'active', l: 'Most Active ⚡' },
+                { k: 'recently_unlocked', l: 'Newest Earned 🔑' },
+                { k: 'mastery', l: 'Mastery Ratio 📈' },
+                { k: 'confidence', l: 'AI Confidence ☄️' }
+              ].map(s => (
+                <TouchableOpacity
+                  key={s.k}
+                  onPress={() => { soundEngine.playClick(); setSkillSortBy(s.k as any); }}
+                  style={[styles.filterPill, skillSortBy === s.k && styles.filterPillActive]}
                 >
-                  <option value="level" className="bg-gothic-card text-white">Tier Level ⚔️</option>
-                  <option value="active" className="bg-gothic-card text-white">Most Active ⚡</option>
-                  <option value="recently_unlocked" className="bg-gothic-card text-white">Newest Earned 🔑</option>
-                  <option value="mastery" className="bg-gothic-card text-white">Mastery Ratio 📈</option>
-                  <option value="confidence" className="bg-gothic-card text-white">AI Confidence ☄️</option>
-                </select>
-                <SlidersHorizontal className="w-3 h-3 text-gothic-gold absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80" />
-              </div>
-            </div>
-          </div>
+                  <Text style={[styles.filterPillText, skillSortBy === s.k && { color: COLORS.gothicGold }]}>
+                    {s.l.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
 
-          {/* Core Dynamic Content Hub */}
-          <div>
-            {(() => {
-              const detectedList = getRecognizedSkills();
-              
-              // Filter operations
-              const filteredList = detectedList.filter(s => {
-                const matchesTab = s.tabGroup === activeSkillTab;
-                const matchesSearch = s.name.toLowerCase().includes(skillSearch.toLowerCase()) || 
-                                      s.description.toLowerCase().includes(skillSearch.toLowerCase());
-                const matchesDomain = skillDomainFilter === 'All Domains' ? true : s.domain === skillDomainFilter;
-                return matchesTab && matchesSearch && matchesDomain;
-              });
-
-              // Sort operations
-              const sortedList = [...filteredList].sort((a, b) => {
-                if (skillSortBy === 'level') return b.level - a.level;
-                if (skillSortBy === 'mastery') return b.mastery - a.mastery;
-                if (skillSortBy === 'active') {
-                  if (a.recentActivity && !b.recentActivity) return -1;
-                  if (!a.recentActivity && b.recentActivity) return 1;
-                  return b.level - a.level;
-                }
-                if (skillSortBy === 'recently_unlocked') {
-                  return b.evidenceList.length - a.evidenceList.length;
-                }
-                if (skillSortBy === 'confidence') {
-                  const confIndex: Record<string, number> = { "ABSOLUTE": 3, "HIGH": 2, "MODERATE": 1 };
-                  return confIndex[b.aiConfidence] - confIndex[a.aiConfidence];
-                }
-                return 0;
-              });
-
-              if (sortedList.length === 0) {
-                return (
-                  <div className="py-12 px-6 bg-gothic-back/40 rounded-xl border border-gothic-border/10 flex flex-col items-center justify-center text-center space-y-3">
-                    <div className="w-12 h-12 rounded-full bg-gothic-back/60 border border-gothic-border/20 flex items-center justify-center text-gray-600">
-                      <Lock className="w-5 h-5 opacity-40" />
-                    </div>
-                    <h3 className="font-cinzel text-xs font-bold tracking-widest text-gray-400 uppercase">
-                      No Recognized Skills in [ {activeSkillTab === 'growing' ? 'Growing' : 'Mastered'} ]
-                    </h3>
-                    <p className="font-mono text-[9px] text-gray-500 max-w-sm uppercase tracking-wide leading-relaxed">
-                      {activeSkillTab === 'growing' 
-                        ? "Initiate campaigns or tasks to discover new skills today. No locked placeholders are displayed."
-                        : "Sovereign masteries will crystallize here once thy skill stages achieve full absolute completion."}
-                    </p>
-                  </div>
-                );
-              }
-
-              const getStatusBadgeStyle = (status: string) => {
-                switch (status) {
-                  case 'Discovered':
-                    return 'text-slate-400 border-slate-500/20 bg-slate-500/5';
-                  case 'Practicing':
-                    return 'text-orange-400 border-orange-500/20 bg-orange-500/5';
-                  case 'Developing':
-                    return 'text-sky-400 border-sky-400/20 bg-sky-400/5';
-                  case 'Proficient':
-                    return 'text-indigo-400 border-indigo-400/20 bg-indigo-400/5';
-                  case 'Advanced':
-                    return 'text-purple-400 border-purple-400/20 bg-purple-400/5';
-                  case 'Mastered':
-                    return 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5';
-                  default:
-                    return 'text-gothic-gold border-gothic-gold/20 bg-gothic-gold/5';
-                }
-              };
-
-              return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-                  {sortedList.map(skill => {
-                    return (
-                      <motion.div
-                        key={skill.id}
-                        layoutId={`skill-card-${skill.id}`}
-                        onClick={() => {
-                          soundEngine.playClick();
-                          setSelectedSkill(skill);
-                        }}
-                        whileHover={{ scale: 1.015 }}
-                        className="p-3.5 bg-gothic-back/60 hover:bg-gothic-back/90 border border-gothic-border/15 hover:border-gothic-gold/30 rounded-xl cursor-pointer transition-all duration-300 relative group flex flex-col justify-between"
-                      >
-                        {/* Interactive Highlight */}
-                        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-gothic-gold/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                        
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="min-w-0 flex-1">
-                              <span className="text-[7px] font-mono text-gray-500 uppercase tracking-widest block font-bold">
-                                ⚜️ {skill.domain}
-                              </span>
-                              <h4 className="font-cinzel text-[11px] font-bold text-white uppercase tracking-wider truncate group-hover:text-gothic-gold transition-colors block mt-0.5">
-                                {skill.name}
-                              </h4>
-                            </div>
-                            <span className="font-mono text-[10px] font-black text-gothic-sky bg-gothic-sky/5 border border-gothic-sky/15 px-1.5 py-0.5 rounded leading-none">
-                              Lvl {skill.level}
-                            </span>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            {/* Proportional progression display indicator bar */}
-                            <div className="space-y-1">
-                              <div className="flex justify-between items-center text-[7.5px] font-mono text-gray-500">
-                                <span className="uppercase">Progress Matrix</span>
-                                <span className="text-white font-bold">{skill.mastery}%</span>
-                              </div>
-                              <div className="h-1 bg-gothic-back rounded-full overflow-hidden border border-gothic-border/5">
-                                <div 
-                                  className="h-full bg-gradient-to-r from-gothic-sky/50 to-gothic-sky transition-all duration-500"
-                                  style={{ width: `${skill.mastery}%` }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-between items-center border-t border-gothic-border/10 pt-2.5 mt-3 gap-2">
-                          <span className="inline-flex items-center gap-0.5 text-[7px] font-mono text-gray-500 uppercase tracking-wider truncate max-w-[150px]">
-                            ⚓ {skill.source}
-                          </span>
-
-                          <span className={`text-[6.5px] font-mono uppercase tracking-widest font-black px-1.5 py-0.5 rounded border shrink-0 ${getStatusBadgeStyle(skill.status)}`}>
-                            {skill.status}
-                          </span>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      </div>
-
-      {/* DETAILED COVENANT ASSESSMENT OVERLAY MODAL */}
-      <AnimatePresence>
-        {selectedSkill && (
-          <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <motion.div
-              layoutId={`skill-card-${selectedSkill.id}`}
-              className="max-w-md w-full bg-gothic-card p-5 sm:p-6 rounded-2xl border-2 border-gothic-gold/30 shadow-[0_0_50px_rgba(0,0,0,0.95)] relative space-y-5"
-            >
-              {/* Cathedral Frame Ends */}
-              <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-gothic-gold" />
-              <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-gothic-gold" />
-              <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-gothic-gold" />
-              <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-gothic-gold" />
-
-              <div className="flex justify-between items-start gap-3 border-b border-gothic-border/20 pb-3">
-                <div>
-                  <span className="text-[7.5px] font-mono text-gothic-gold uppercase tracking-widest font-bold font-semibold">
-                    🛡️ Verified Growth Sphere
-                  </span>
-                  <h3 className="font-cinzel text-base font-bold text-white uppercase tracking-widest block mt-1">
-                    {selectedSkill.name}
-                  </h3>
-                </div>
-                <button
-                  onClick={() => {
-                    soundEngine.playClick();
-                    setSelectedSkill(null);
-                  }}
-                  className="text-gray-500 hover:text-white font-mono text-[10px] uppercase tracking-widest px-2 py-1 hover:bg-gothic-back rounded-lg border border-transparent hover:border-gothic-border/20 cursor-pointer"
+          {/* Skill lists items */}
+          <View style={styles.skillsGrid}>
+            {sortedList.length > 0 ? (
+              sortedList.map(skill => (
+                <TouchableOpacity
+                  key={skill.id}
+                  onPress={() => { soundEngine.playClick(); setSelectedSkill(skill); }}
+                  style={styles.skillCard}
                 >
-                  [ Dismiss ]
-                </button>
-              </div>
+                  <View style={styles.skillHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.skillDomainText}>⚜️ {skill.domain.toUpperCase()}</Text>
+                      <Text style={styles.skillNameText} numberOfLines={1}>{skill.name.toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.skillLvlBadge}>
+                      <Text style={styles.skillLvlBadgeText}>LVL {skill.level}</Text>
+                    </View>
+                  </View>
 
-              {/* 1. OVERVIEW AREA */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-2.5 bg-gothic-back/40 rounded-xl border border-gothic-border/15">
-                  <span className="text-[7px] font-mono text-gray-500 uppercase tracking-widest block">
-                    Lifecycle Stage
-                  </span>
-                  <span className="text-[10px] font-cinzel font-black text-gothic-sky uppercase block mt-1">
-                    ★ {selectedSkill.status}
-                  </span>
-                </div>
-                <div className="p-2.5 bg-gothic-back/40 rounded-xl border border-gothic-border/15">
-                  <span className="text-[7px] font-mono text-gray-500 uppercase tracking-widest block">
-                    Oracle Score Matrix
-                  </span>
-                  <span className="text-[10.5px] font-mono text-white block mt-1 font-bold">
-                    Tier {selectedSkill.level} ({selectedSkill.mastery}% mastery)
-                  </span>
-                </div>
-              </div>
+                  <View style={styles.skillProgressBlock}>
+                    <View style={styles.skillProgressHeader}>
+                      <Text style={styles.skillProgressLabel}>PROGRESS</Text>
+                      <Text style={styles.skillProgressVal}>{skill.mastery}%</Text>
+                    </View>
+                    <View style={styles.skillProgressTrack}>
+                      <View style={[styles.skillProgressFill, { width: `${skill.mastery}%` }]} />
+                    </View>
+                  </View>
 
-              {/* 2. VERIFIED EVIDENCE SECTION */}
-              <div className="space-y-1.5">
-                <h4 className="font-cinzel text-[9.5px] font-bold text-gothic-gold uppercase tracking-widest flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-gothic-gold shrink-0 animate-pulse" />
-                  Demonstrated Evidence
-                </h4>
-                <div className="bg-gothic-back/70 rounded-xl p-3 border border-gothic-border/20 space-y-2">
-                  <p className="text-[8px] font-mono text-gray-400 uppercase tracking-wide leading-relaxed">
-                    The Scribe recorded these completed actions & intentions as proof of thy training:
-                  </p>
-                  <ul className="space-y-1.5">
-                    {selectedSkill.evidenceList.map((ev: string, idx: number) => (
-                      <li key={idx} className="flex items-start gap-1.5 text-[8.5px] font-mono text-white leading-normal">
-                        <span className="text-gothic-gold shrink-0">†</span>
-                        <span>{ev}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* 3. RELATED STATS */}
-              <div className="space-y-1.5">
-                <h4 className="font-cinzel text-[9.5px] font-bold text-gothic-gold uppercase tracking-widest flex items-center gap-1.5">
-                  <TrendingUp className="w-3.5 h-3.5 text-gothic-gold" />
-                  Related Core Attributes
-                </h4>
-                <div className="flex flex-wrap gap-1.5">
-                  {selectedSkill.contributesTo.map((stat: string) => (
-                    <span 
-                      key={stat} 
-                      className="px-2 py-0.5 bg-gothic-back/50 border border-gothic-border/15 rounded text-[8px] font-mono text-gray-400 uppercase tracking-wider"
-                    >
-                      {stat} Attribute +Rank
-                    </span>
-                  ))}
-                  <span 
-                    className="px-2 py-0.5 bg-gothic-sky/10 border border-gothic-sky/20 rounded text-[8px] font-mono text-gothic-sky uppercase tracking-wider"
-                  >
-                    AI CONFIDENCE: {selectedSkill.aiConfidence}
-                  </span>
-                </div>
-              </div>
-
-              {/* 4. AI ASSESSMENT BLOCK */}
-              <div className="space-y-1.5">
-                <h4 className="font-cinzel text-[9.5px] font-bold text-gothic-gold uppercase tracking-widest flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-gothic-gold" />
-                  Scribe's AI Assessment
-                </h4>
-                <div className="bg-gothic-back/90 rounded-xl p-3 border border-gothic-gold/15 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-16 h-16 opacity-5 pointer-events-none">
-                    <Brain className="w-full h-full text-gothic-gold" />
-                  </div>
-                  <p className="text-[8.5px] font-mono text-gothic-gold/90 leading-normal uppercase tracking-wide">
-                    {selectedSkill.assessment}
-                  </p>
-                </div>
-              </div>
-
-              {/* Action and Dismiss btn */}
-              <div className="flex justify-end pt-2 border-t border-gothic-border/10">
-                <button
-                  onClick={() => {
-                    soundEngine.playClick();
-                    setSelectedSkill(null);
-                  }}
-                  className="w-full bg-gradient-to-r from-gothic-gold/10 to-gothic-gold/20 hover:from-gothic-gold/20 hover:to-gothic-gold/30 text-gothic-gold text-[9.5px] font-mono uppercase tracking-widest py-2 rounded-xl border border-gothic-gold/30 hover:border-gothic-gold/50 cursor-pointer transition-all text-center font-bold"
-                >
-                  Close Scroll of Assess
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-        </>
+                  <View style={styles.skillFooterRow}>
+                    <Text style={styles.skillSourceText} numberOfLines={1}>⚓ {skill.source.toUpperCase()}</Text>
+                    <View style={[styles.statusBadge, { borderColor: getStatusBadgeStyle(skill.status).borderColor, backgroundColor: getStatusBadgeStyle(skill.status).backgroundColor }]}>
+                      <Text style={[styles.statusBadgeText, { color: getStatusBadgeStyle(skill.status).color }]}>
+                        {skill.status.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.emptySkillsCard}>
+                <Lock size={16} color={COLORS.gray600} />
+                <Text style={styles.emptySkillsTitle}>NO RECOGNIZED COVENANTS</Text>
+                <Text style={styles.emptySkillsDesc}>
+                  Initiate campaigns or tasks matching domains to discover new skills.
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
       )}
 
-      {/* 3. AI ASSESSMENT ENGINE & EVOLVING STATS */}
+      {/* 3. ALCHEMICAL ATTRIBUTES GRID & EXAMINE SOUL */}
       {tab === 'The Wanderer' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* CHARACTER STATS GROUP CARD */}
-        <div className="p-6 bg-gothic-card rounded-2xl border border-gothic-border md:col-span-2 space-y-4">
-          <h2 className="font-cinzel text-xs font-bold tracking-widest text-gothic-gold uppercase flex items-center gap-1.5 border-b border-gothic-border/20 pb-2">
-            <Activity className="w-4 h-4 text-gothic-gold" />
-            Character Attributes
-          </h2>
+        <View style={styles.row}>
+          {/* Attributes */}
+          <View style={[styles.card, { flex: 2 }]}>
+            <Text style={styles.cardHeaderTitle}>⚔️ CHARACTER ATTRIBUTES</Text>
+            <View style={styles.attrsList}>
+              {Object.entries(profile.stats).map(([statName, val]) => {
+                const valNum = val as number;
+                const label = statName.replace(/([A-Z])/g, ' $1').toUpperCase();
+                
+                let colorBar = COLORS.gothicGold;
+                if (['strength', 'endurance', 'discipline', 'recovery'].includes(statName)) {
+                  colorBar = COLORS.gothicCrimson;
+                } else if (statName === 'programming') {
+                  colorBar = COLORS.gothicSky;
+                }
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-3.5">
-            {/* Translate list of items */}
-            {Object.entries(profile.stats).map(([statName, val]) => {
-              const valNum = val as number;
-              // Convert camel case to beautiful literal spaces
-              const label = statName.replace(/([A-Z])/g, ' $1').toUpperCase();
-              
-              // Map colors based on category
-              let colorBar = 'bg-gothic-gold';
-              if (['strength', 'endurance', 'discipline', 'recovery'].includes(statName)) {
-                colorBar = 'bg-gothic-crimson';
-              } else if (statName === 'programming') {
-                colorBar = 'bg-gothic-sky';
-              }
+                let rankName = 'Novice';
+                if (valNum >= 90) rankName = 'Master';
+                else if (valNum >= 70) rankName = 'Expert';
+                else if (valNum >= 45) rankName = 'Adept';
+                else if (valNum >= 25) rankName = 'Apprentice';
 
-              // Stat ranks mapped out
-              let rankName = 'Novice';
-              if (valNum >= 90) rankName = 'Master';
-              else if (valNum >= 70) rankName = 'Expert';
-              else if (valNum >= 45) rankName = 'Adept';
-              else if (valNum >= 25) rankName = 'Apprentice';
+                return (
+                  <View key={statName} style={styles.attrRow}>
+                    <View style={styles.attrHeader}>
+                      <Text style={styles.attrLabel}>{label}</Text>
+                      <Text style={styles.attrRank}>{rankName} ({valNum}/100)</Text>
+                    </View>
+                    <View style={styles.attrTrack}>
+                      <View style={[styles.attrFill, { backgroundColor: colorBar, width: `${valNum}%` }]} />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
 
-              return (
-                <div key={statName} className="space-y-1">
-                  <div className="flex justify-between items-end text-[8.5px] font-mono uppercase">
-                    <span className="text-gray-400 font-bold">{label}</span>
-                    <span className="text-gray-500 font-semibold">{rankName} ({valNum}/100)</span>
-                  </div>
-                  
-                  <div className="h-1.5 bg-gothic-back rounded-sm overflow-hidden border border-gothic-border/10">
-                    <div 
-                      className={`h-full ${colorBar} transition-all duration-500`}
-                      style={{ width: `${valNum}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* AI PERIODIC ASSESSMENT CONTROL */}
-        <div className="p-6 bg-gothic-card rounded-2xl border border-gothic-border flex flex-col justify-between space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-center gap-1.5 text-gothic-gold-dim">
-              <MessageSquare className="w-4 h-4 text-gothic-gold" />
-              <span className="font-cinzel text-[10px] uppercase tracking-widest font-bold">AI Examiner</span>
-            </div>
-            
-            <p className="text-[10px] font-mono text-gray-400 leading-relaxed uppercase">
-              The Grand Examiner audits thy complete performance list to reward stat points, customize advanced titles, and counsel pacing.
-            </p>
+          {/* AI Auditing Column */}
+          <View style={[styles.card, { flex: 1, marginTop: 12 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <MessageSquare size={14} color={COLORS.gothicGold} />
+              <Text style={styles.cardHeaderTitle}>AI SOUL EXAMINER</Text>
+            </View>
+            <Text style={styles.coachingDesc}>
+              The examiner audits thy completed ledger of deeds to reward attributes, unlock paths, and customize advanced titles.
+            </Text>
 
             {profile.lastAssessment ? (
-              <div className="p-3 bg-gothic-back/40 border border-gothic-border/10 rounded-lg space-y-1">
-                <span className="text-[6.5px] font-mono text-gray-500 uppercase block font-bold">
-                  LAST INSPECTION: {profile.lastAssessmentDate}
-                </span>
-                <span className="text-[9.5px] font-mono text-gothic-gold block leading-relaxed italic">
-                  "{profile.lastAssessment}"
-                </span>
-              </div>
+              <View style={styles.lastAuditCard}>
+                <Text style={styles.lastAuditDate}>LAST INSPECTION: {profile.lastAssessmentDate}</Text>
+                <Text style={styles.lastAuditText}>"{profile.lastAssessment.toUpperCase()}"</Text>
+              </View>
             ) : null}
-          </div>
 
-          <div className="space-y-2">
-            <button
-              onClick={handleTriggerAIAssessment}
-              disabled={isAssessing}
-              className="w-full py-2 bg-gothic-gold text-black text-[10px] uppercase font-mono font-bold tracking-widest hover:bg-yellow-500 transition-colors flex items-center justify-center gap-1.5"
+            <TouchableOpacity 
+              onPress={handleTriggerAIAssessment} 
+              disabled={isAssessing} 
+              style={[styles.auditBtn, isAssessing && { opacity: 0.6 }]}
             >
               {isAssessing ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  Inspecting Soul...
-                </>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <ActivityIndicator size="small" color="#000" />
+                  <Text style={styles.auditBtnText}>INSPECTING SOUL...</Text>
+                </View>
               ) : (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Perform Assessment
-                </>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <RefreshCw size={12} color="#000" />
+                  <Text style={styles.auditBtnText}>PERFORM ASSESSMENT</Text>
+                </View>
               )}
-            </button>
+            </TouchableOpacity>
 
-            {/* Display output report card dialog modal */}
-            <AnimatePresence>
-              {assessmentResult && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="mt-3 p-3 bg-gothic-back border border-gothic-gold/30 rounded-lg text-left"
-                >
-                  <div className="flex justify-between items-center border-b border-gothic-border/20 pb-1 mb-1.5">
-                    <span className="text-[7.5px] font-mono text-gothic-gold uppercase tracking-wider font-bold">
-                      CRUCIBLE INSCRIPTION SUCCESS
-                    </span>
-                    <button 
-                      onClick={() => setAssessmentResult(null)}
-                      className="text-[9px] font-mono text-gray-500 hover:text-white"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <pre className="text-[9.5px] font-mono text-gray-300 whitespace-pre-wrap leading-relaxed uppercase">
-                    {assessmentResult}
-                  </pre>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
-    )}
-
-      {/* 5. THE ACHIEVEMENTS HALL */}
-      {tab === 'The Wanderer' && (
-        <>
-          <div className="p-6 bg-gothic-card rounded-2xl border border-gothic-border relative overflow-hidden" id="achievements-ledger">
-        <h2 className="font-cinzel text-xs font-bold tracking-widest text-gothic-gold uppercase mb-5 flex items-center gap-1.5 border-b border-gothic-border/20 pb-3">
-          <Award className="w-4 h-4 text-gothic-gold animate-pulse" />
-          The Achievements hall
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {profile.achievements.map((ach) => {
-            const unlocked = ach.unlocked;
-            
-            // Map rarity glow styles
-            let cardStyle = 'border-gothic-border/20 text-gray-600 bg-gothic-card/20 filter grayscale';
-            let glowBadge = 'text-gray-500 bg-gothic-back/50 border-gothic-border/20';
-
-            if (unlocked) {
-              if (ach.rarity === 'Mythic') {
-                cardStyle = 'border-purple-600/40 text-purple-400 bg-purple-950/5 shadow-[0_0_15px_rgba(168,85,247,0.1)]';
-                glowBadge = 'text-purple-400 bg-purple-950/20 border-purple-500/35';
-              } else if (ach.rarity === 'Legendary') {
-                cardStyle = 'border-orange-600/40 text-orange-400 bg-orange-950/5 shadow-[0_0_15px_rgba(234,88,12,0.1)]';
-                glowBadge = 'text-orange-400 bg-orange-950/20 border-orange-500/35';
-              } else if (ach.rarity === 'Epic') {
-                cardStyle = 'border-gothic-gold-dim text-gothic-gold bg-gothic-gold/5 shadow-[0_0_12px_rgba(200,158,92,0.08)]';
-                glowBadge = 'text-gothic-gold bg-gothic-gold/15 border-gothic-gold/25';
-              } else {
-                cardStyle = 'border-gothic-sky/30 text-gothic-sky bg-gothic-sky/5';
-                glowBadge = 'text-gothic-sky bg-gothic-sky/15 border-gothic-sky/25';
-              }
-            }
-
-            return (
-              <div 
-                key={ach.id} 
-                className={`p-4 border rounded-xl flex items-start gap-3 transition-all ${cardStyle}`}
-                id={`achievement-card-${ach.id}`}
-              >
-                <div className="mt-0.5">
-                  <div className={`w-10 h-10 rounded-full border flex items-center justify-center flex-shrink-0 ${glowBadge}`}>
-                    <Trophy className="w-5 h-5" />
-                  </div>
-                </div>
-
-                <div className="space-y-1 uppercase select-none">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`text-[10px] font-cinzel font-bold font-medium tracking-wide ${unlocked ? 'text-white' : 'text-gray-600'}`}>
-                      {ach.name}
-                    </span>
-                    <span className="text-[6.5px] font-mono rounded px-1 border border-current font-bold">
-                      {ach.rarity}
-                    </span>
-                  </div>
-
-                  <p className="text-[9px] font-mono text-gray-500 leading-normal">
-                    {ach.description}
-                  </p>
-
-                  {unlocked && ach.unlockedAt && (
-                    <span className="text-[7px] font-mono text-gray-500 block">
-                      Unlocked: {ach.unlockedAt}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 6. ABSOLUTE PENANCE PURGE DIVISION */}
-      <div className="p-6 bg-gothic-card rounded-2xl border border-gothic-border/30 relative overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-4 mt-6" id="purge-division">
-        <div className="text-left font-sans">
-          <h2 className="font-cinzel text-xs font-bold tracking-widest text-gothic-crimson uppercase flex items-center gap-1.5 font-black">
-            <ShieldAlert className="w-4 h-4 text-gothic-crimson" />
-            The Ultimate Absolution
-          </h2>
-          <p className="font-mono text-[8.5px] text-gray-500 uppercase mt-1 leading-relaxed max-w-md">
-            Wipe thy records clean. To shatter thy current penance and begin anew, invoke the decree of ultimate departure.
-          </p>
-        </div>
-
-        <button
-          onClick={() => {
-            soundEngine.playClick();
-            if (onReset) onReset();
-          }}
-          className="px-6 py-2.5 bg-gothic-back hover:bg-gothic-crimson/15 border-2 border-gothic-crimson/50 hover:border-gothic-crimson text-gothic-crimson text-[9.5px] font-mono tracking-widest uppercase font-black rounded-lg transition-all cursor-pointer shadow-[0_0_15px_rgba(239,68,68,0.05)] active:scale-95 shrink-0"
-          id="purge-enough-btn"
-        >
-          † Enough †
-        </button>
-      </div>
-        </>
+            {assessmentResult && (
+              <View style={styles.auditResultBox}>
+                <View style={styles.auditResultHeader}>
+                  <Text style={styles.auditResultTitle}>CRUCIBLE INSCRIPTION SUCCESS</Text>
+                  <TouchableOpacity onPress={() => setAssessmentResult(null)}>
+                    <Text style={{ color: COLORS.gray500, fontSize: 10 }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.auditResultText}>{assessmentResult}</Text>
+              </View>
+            )}
+          </View>
+        </View>
       )}
 
-    </div>
+      {/* 4. ACHIEVEMENTS HALL */}
+      {tab === 'The Wanderer' && (
+        <View style={[styles.card, { marginTop: 16 }]}>
+          <Text style={styles.cardHeaderTitle}>🏆 THE ACHIEVEMENTS HALL</Text>
+          <View style={styles.achievementsGrid}>
+            {profile.achievements.map((ach) => {
+              const unlocked = ach.unlocked;
+              
+              let borderColor = 'rgba(46, 50, 62, 0.2)';
+              let bg = 'rgba(46, 50, 62, 0.05)';
+              let iconColor = COLORS.gray500;
+              let nameColor = COLORS.gray600;
+
+              if (unlocked) {
+                nameColor = '#fff';
+                if (ach.rarity === 'Mythic') {
+                  borderColor = 'rgba(168, 85, 247, 0.4)';
+                  bg = 'rgba(168, 85, 247, 0.05)';
+                  iconColor = '#a855f7';
+                } else if (ach.rarity === 'Legendary') {
+                  borderColor = 'rgba(234, 88, 12, 0.4)';
+                  bg = 'rgba(234, 88, 12, 0.05)';
+                  iconColor = '#ea580c';
+                } else if (ach.rarity === 'Epic') {
+                  borderColor = COLORS.gothicBorder;
+                  bg = 'rgba(200, 158, 92, 0.05)';
+                  iconColor = COLORS.gothicGold;
+                } else {
+                  borderColor = 'rgba(56, 189, 248, 0.3)';
+                  bg = 'rgba(56, 189, 248, 0.05)';
+                  iconColor = COLORS.gothicSky;
+                }
+              }
+
+              return (
+                <View key={ach.id} style={[styles.achCard, { borderColor, backgroundColor: bg }]}>
+                  <View style={[styles.achIconBg, unlocked && { borderColor: iconColor }]}>
+                    <Trophy size={16} color={iconColor} />
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
+                      <Text style={[styles.achName, { color: nameColor }]}>{ach.name.toUpperCase()}</Text>
+                      <View style={[styles.achRarityBadge, { borderColor: iconColor }]}>
+                        <Text style={[styles.achRarityBadgeText, { color: iconColor }]}>{ach.rarity.toUpperCase()}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.achDesc}>{ach.description.toUpperCase()}</Text>
+                    {unlocked && ach.unlockedAt && (
+                      <Text style={styles.achTime}>UNLOCKED: {ach.unlockedAt}</Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* 5. ULTIMATE PENANCE WIPE */}
+      {tab === 'The Wanderer' && (
+        <View style={styles.purgeCard}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <ShieldAlert size={14} color={COLORS.gothicCrimson} />
+              <Text style={styles.purgeTitle}>THE ULTIMATE ABSOLUTION</Text>
+            </View>
+            <Text style={styles.purgeDesc}>
+              Wipe thy records clean. To shatter thy current penance and begin anew, invoke the decree of ultimate departure.
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => { soundEngine.playClick(); if (onReset) onReset(); }}
+            style={styles.purgeBtn}
+          >
+            <Text style={styles.purgeBtnText}>† ENOUGH †</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* SELECTED SKILL COVENANT OVERLAY MODAL */}
+      {selectedSkill && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={[styles.modalCorner, { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 }]} />
+            <View style={[styles.modalCorner, { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 }]} />
+            <View style={[styles.modalCorner, { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 }]} />
+            <View style={[styles.modalCorner, { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 }]} />
+
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalHeaderLabel}>🛡️ VERIFIED GROWTH SPHERE</Text>
+                <Text style={styles.modalHeaderTitle}>{selectedSkill.name.toUpperCase()}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedSkill(null)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>[ DISMISS ]</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginVertical: 12 }}>
+              <View style={styles.modalStatsRow}>
+                <View style={styles.modalStatBox}>
+                  <Text style={styles.modalStatLabel}>LIFECYCLE STAGE</Text>
+                  <Text style={styles.modalStatVal}>★ {selectedSkill.status.toUpperCase()}</Text>
+                </View>
+                <View style={styles.modalStatBox}>
+                  <Text style={styles.modalStatLabel}>ORACLE SCORE</Text>
+                  <Text style={styles.modalStatVal}>TIER {selectedSkill.level} ({selectedSkill.mastery}%)</Text>
+                </View>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>DEMONSTRATED EVIDENCE</Text>
+                <View style={styles.modalSectionBox}>
+                  {selectedSkill.evidenceList.map((ev: string, idx: number) => (
+                    <Text key={idx} style={styles.modalEvidenceText}>† {ev.toUpperCase()}</Text>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>RELATED ATTRIBUTES</Text>
+                <View style={styles.attributesListRow}>
+                  {selectedSkill.contributesTo.map((stat: string) => (
+                    <View key={stat} style={styles.modalAttrPill}>
+                      <Text style={styles.modalAttrPillText}>{stat.toUpperCase()} +RANK</Text>
+                    </View>
+                  ))}
+                  <View style={[styles.modalAttrPill, { backgroundColor: 'rgba(56, 189, 248, 0.1)' }]}>
+                    <Text style={[styles.modalAttrPillText, { color: COLORS.gothicSky }]}>CONFIDENCE: {selectedSkill.aiConfidence}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>SCRIBE'S AI ASSESSMENT</Text>
+                <View style={[styles.modalSectionBox, { borderColor: COLORS.gothicGold }]}>
+                  <Text style={styles.modalAssessmentText}>{selectedSkill.assessment.toUpperCase()}</Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity onPress={() => setSelectedSkill(null)} style={styles.modalSubmitBtn}>
+              <Text style={styles.modalSubmitBtnText}>CLOSE SCROLL OF ASSESS</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+    </ScrollView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  card: {
+    backgroundColor: COLORS.gothicCard,
+    borderColor: COLORS.gothicBorder,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  avatarContainer: {
+    position: 'relative',
+  },
+  levelBadge: {
+    position: 'absolute',
+    bottom: -6,
+    left: '50%',
+    transform: [{ translateX: -30 }],
+    backgroundColor: COLORS.gothicGold,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  levelBadgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: '#000',
+    fontWeight: 'black',
+  },
+  avatarDetails: {
+    flex: 1,
+    gap: 4,
+  },
+  characterName: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  rankBadge: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray400,
+    backgroundColor: COLORS.gothicDark,
+    borderColor: 'rgba(46, 50, 62, 0.6)',
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  characterTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9.5,
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+    fontWeight: 'bold',
+  },
+  xpBlock: {
+    marginTop: 20,
+    gap: 6,
+  },
+  xpRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  xpLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray500,
+  },
+  xpValue: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  xpTrack: {
+    height: 8,
+    backgroundColor: COLORS.gothicDark,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.4)',
+    overflow: 'hidden',
+  },
+  xpFill: {
+    height: '100%',
+    backgroundColor: COLORS.gothicGold,
+  },
+  titlesRow: {
+    marginTop: 16,
+    gap: 6,
+  },
+  titlesHeading: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+  },
+  titlesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  titlePill: {
+    backgroundColor: COLORS.gothicDark,
+    borderColor: 'rgba(46, 50, 62, 0.4)',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  titlePillActive: {
+    backgroundColor: 'rgba(200, 158, 92, 0.2)',
+    borderColor: COLORS.gothicGold,
+  },
+  titlePillText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+  },
+  hudGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(46, 50, 62, 0.2)',
+    paddingTop: 16,
+  },
+  hudItem: {
+    flex: 1,
+    minWidth: 80,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderColor: COLORS.gothicBorder,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 8,
+    alignItems: 'center',
+  },
+  hudValText: {
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+  },
+  hudLblText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    color: COLORS.gray500,
+    marginTop: 2,
+  },
+  cardHeaderRow: {
+    flexDirection: 'column',
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.2)',
+    paddingBottom: 12,
+    marginBottom: 12,
+  },
+  cardHeaderTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11.5,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+  },
+  cardHeaderSubtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+  },
+  subTabRow: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.gothicDark,
+    borderRadius: 6,
+    padding: 2,
+    alignSelf: 'flex-start',
+  },
+  subTabBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  subTabActive: {
+    backgroundColor: 'rgba(200, 158, 92, 0.15)',
+  },
+  subTabBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+  },
+  filtersContainer: {
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderColor: 'rgba(46, 50, 62, 0.2)',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    gap: 8,
+    marginBottom: 12,
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.gothicDark,
+    borderColor: COLORS.gothicBorder,
+    borderWidth: 1,
+    borderRadius: 8,
+    height: 28,
+    paddingHorizontal: 8,
+  },
+  searchIcon: {
+    marginRight: 6,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#fff',
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    padding: 0,
+  },
+  filterTitleLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  pillsScroll: {
+    flexDirection: 'row',
+  },
+  filterPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: COLORS.gothicDark,
+    borderColor: COLORS.gothicBorder,
+    borderWidth: 1,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  filterPillActive: {
+    borderColor: COLORS.gothicGold,
+    backgroundColor: 'rgba(200, 158, 92, 0.1)',
+  },
+  filterPillText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+  },
+  skillsGrid: {
+    gap: 8,
+  },
+  skillCard: {
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderColor: COLORS.gothicBorder,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+  },
+  skillHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  skillDomainText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    color: COLORS.gray500,
+  },
+  skillNameText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9.5,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 2,
+  },
+  skillLvlBadge: {
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderColor: 'rgba(56, 189, 248, 0.25)',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  skillLvlBadgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gothicSky,
+    fontWeight: 'bold',
+  },
+  skillProgressBlock: {
+    marginTop: 8,
+    gap: 4,
+  },
+  skillProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  skillProgressLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    color: COLORS.gray500,
+  },
+  skillProgressVal: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  skillProgressTrack: {
+    height: 4,
+    backgroundColor: COLORS.gothicDark,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  skillProgressFill: {
+    height: '100%',
+    backgroundColor: COLORS.gothicSky,
+  },
+  skillFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(46, 50, 62, 0.2)',
+    paddingTop: 8,
+  },
+  skillSourceText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    color: COLORS.gray500,
+    flex: 1,
+  },
+  statusBadge: {
+    borderRadius: 4,
+    borderWidth: 0.5,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+  },
+  statusBadgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 6.5,
+    fontWeight: 'bold',
+  },
+  emptySkillsCard: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    backgroundColor: COLORS.gothicDark,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.2)',
+    gap: 6,
+  },
+  emptySkillsTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9.5,
+    fontWeight: 'bold',
+    color: COLORS.gray400,
+  },
+  emptySkillsDesc: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray600,
+    textAlign: 'center',
+    maxWidth: 200,
+  },
+  row: {
+    flexDirection: 'column',
+  },
+  attrsList: {
+    gap: 8,
+    marginTop: 10,
+  },
+  attrRow: {
+    gap: 4,
+  },
+  attrHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  attrLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray400,
+    fontWeight: 'bold',
+  },
+  attrRank: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray500,
+  },
+  attrTrack: {
+    height: 6,
+    backgroundColor: COLORS.gothicDark,
+    borderRadius: 3,
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(46, 50, 62, 0.2)',
+  },
+  attrFill: {
+    height: '100%',
+  },
+  coachingDesc: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray400,
+    lineHeight: 12,
+  },
+  lastAuditCard: {
+    backgroundColor: COLORS.gothicDark,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.2)',
+    padding: 8,
+    marginVertical: 10,
+    gap: 4,
+  },
+  lastAuditDate: {
+    fontFamily: FONTS.mono,
+    fontSize: 6,
+    color: COLORS.gray500,
+  },
+  lastAuditText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicGold,
+    fontStyle: 'italic',
+  },
+  auditBtn: {
+    backgroundColor: COLORS.gothicGold,
+    borderRadius: 6,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  auditBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  auditResultBox: {
+    marginTop: 10,
+    backgroundColor: COLORS.gothicDark,
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+  },
+  auditResultHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(46, 50, 62, 0.2)',
+    paddingBottom: 4,
+    marginBottom: 6,
+  },
+  auditResultTitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  auditResultText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray300,
+    lineHeight: 12,
+  },
+  achievementsGrid: {
+    gap: 8,
+    marginTop: 10,
+  },
+  achCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  achIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    backgroundColor: COLORS.gothicDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  achName: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9.5,
+    fontWeight: 'bold',
+  },
+  achRarityBadge: {
+    borderWidth: 0.5,
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  achRarityBadgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 6,
+    fontWeight: 'bold',
+  },
+  achDesc: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray500,
+  },
+  achTime: {
+    fontFamily: FONTS.mono,
+    fontSize: 6.5,
+    color: COLORS.gray500,
+    marginTop: 2,
+  },
+  purgeCard: {
+    backgroundColor: COLORS.gothicCard,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'column',
+    gap: 12,
+    marginTop: 12,
+  },
+  purgeTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.gothicCrimson,
+  },
+  purgeDesc: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+    marginTop: 4,
+    lineHeight: 12,
+  },
+  purgeBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    borderColor: COLORS.gothicCrimson,
+    borderWidth: 1,
+    borderRadius: 6,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  purgeBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: COLORS.gothicCrimson,
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10, 11, 13, 0.95)',
+    zIndex: 3000,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 450,
+    height: '75%',
+    backgroundColor: COLORS.gothicCard,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+    borderRadius: 16,
+    padding: 16,
+    position: 'relative',
+  },
+  modalCorner: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderColor: COLORS.gothicGold,
+    opacity: 0.45,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.3)',
+    paddingBottom: 10,
+  },
+  modalHeaderLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+  },
+  modalHeaderTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: COLORS.gothicDark,
+    borderColor: COLORS.gothicBorder,
+    borderWidth: 1,
+    borderRadius: 6,
+  },
+  modalCloseBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray400,
+  },
+  modalStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  modalStatBox: {
+    flex: 1,
+    backgroundColor: COLORS.gothicDark,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 10,
+    padding: 8,
+  },
+  modalStatLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 6.5,
+    color: COLORS.gray500,
+  },
+  modalStatVal: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9.5,
+    fontWeight: 'bold',
+    color: COLORS.gothicSky,
+    marginTop: 2,
+  },
+  modalSection: {
+    marginTop: 12,
+    gap: 6,
+  },
+  modalSectionTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+  },
+  modalSectionBox: {
+    backgroundColor: COLORS.gothicDark,
+    borderColor: COLORS.gothicBorder,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 8,
+    gap: 4,
+  },
+  modalEvidenceText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: '#fff',
+    lineHeight: 11,
+  },
+  attributesListRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  modalAttrPill: {
+    backgroundColor: COLORS.gothicDark,
+    borderColor: COLORS.gothicBorder,
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  modalAttrPillText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7,
+    color: COLORS.gray400,
+  },
+  modalAssessmentText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicGold,
+    lineHeight: 12,
+  },
+  modalSubmitBtn: {
+    backgroundColor: 'rgba(200, 158, 92, 0.15)',
+    borderColor: COLORS.gothicGold,
+    borderWidth: 1,
+    borderRadius: 10,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  modalSubmitBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+  }
+});
+export default GothicProfile;

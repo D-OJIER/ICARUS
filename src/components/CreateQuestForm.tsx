@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { Skull, Feather } from 'lucide-react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  ActivityIndicator, 
+  StyleSheet 
+} from 'react-native';
+import { Skull, Feather } from 'lucide-react-native';
 import { QuestDifficulty, QuestCategory } from '../types';
 import { soundEngine } from '../utils/audio';
+import { generateQuestSuggestions } from '../utils/aiEngine';
+import { COLORS, FONTS, THEME_STYLES } from '../theme';
 
 interface CreateQuestFormProps {
   onAddQuest: (questData: {
@@ -34,7 +43,7 @@ export const CreateQuestForm: React.FC<CreateQuestFormProps> = ({ onAddQuest, pr
     const inputSeed = title.trim() || description.trim();
     if (!inputSeed) {
       soundEngine.playClick();
-      setOracleError('Provide key terms first (e.g. "go running" or "clean house") so standard guidance exists.');
+      setOracleError('Provide key terms first (e.g. "go running" or "clean house").');
       setTimeout(() => setOracleError(''), 7000);
       return;
     }
@@ -44,18 +53,12 @@ export const CreateQuestForm: React.FC<CreateQuestFormProps> = ({ onAddQuest, pr
     soundEngine.playClick();
 
     try {
-      const res = await fetch('/api/ai/suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: inputSeed })
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'The alignment of stars is imperfect. Divine link failed.');
+      const data = await generateQuestSuggestions(inputSeed);
+      
+      if (!data || (data as any).error) {
+        throw new Error('AI is unavailable. Please come back later.');
       }
 
-      const data = await res.json();
       if (data.title) setTitle(data.title);
       if (data.description) setDescription(data.description);
       if (data.difficulty) setDifficulty(data.difficulty as QuestDifficulty);
@@ -63,7 +66,6 @@ export const CreateQuestForm: React.FC<CreateQuestFormProps> = ({ onAddQuest, pr
       
       soundEngine.playClick();
     } catch (err: any) {
-      console.error(err);
       setOracleError('AI is unavailable. Please come back later.');
       setTimeout(() => setOracleError(''), 10000);
     } finally {
@@ -71,8 +73,7 @@ export const CreateQuestForm: React.FC<CreateQuestFormProps> = ({ onAddQuest, pr
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (!title.trim()) return;
 
     soundEngine.playClick();
@@ -81,10 +82,9 @@ export const CreateQuestForm: React.FC<CreateQuestFormProps> = ({ onAddQuest, pr
       description: description.trim(),
       difficulty,
       category,
-      dueDate: dueDate || undefined
+      dueDate: dueDate.trim() || undefined
     });
 
-    // Reset fields
     setTitle('');
     setDescription('');
     setDifficulty('Lesser Burden');
@@ -92,147 +92,266 @@ export const CreateQuestForm: React.FC<CreateQuestFormProps> = ({ onAddQuest, pr
     setDueDate('');
   };
 
-  return (
-    <form 
-      onSubmit={handleSubmit} 
-      className="p-6 bg-gothic-card rounded-2xl border border-gothic-border relative overflow-hidden"
-      id="create-quest-form"
-    >
-      {/* Background Filigree Accent */}
-      <div className="absolute top-0 left-0 w-8 h-8 opacity-25 border-t border-l border-gothic-gold rounded-tl" />
-      <div className="absolute top-0 right-0 w-8 h-8 opacity-25 border-t border-r border-gothic-gold rounded-tr" />
-      <div className="absolute bottom-0 left-0 w-8 h-8 opacity-25 border-b border-l border-gothic-gold rounded-bl" />
-      <div className="absolute bottom-0 right-0 w-8 h-8 opacity-25 border-b border-r border-gothic-gold rounded-br" />
+  // Custom segmented selectors
+  const difficulties: QuestDifficulty[] = ['Lesser Burden', 'Sinuous Vow', 'Mortal Penance'];
+  const categories: QuestCategory[] = ['General', 'Vow', 'Trial', 'Crusade'];
 
-      {/* Responsive Form Header with AI Oracle */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 pb-3 border-b border-gothic-border/20">
-        <h2 className="font-cinzel text-sm md:text-base font-bold text-gothic-gold tracking-wider flex items-center gap-2 uppercase">
-          <Feather className="w-4 h-4 text-gothic-gold animate-pulse" />
-          Inscribe New Penance Vow
-        </h2>
-        
-        <button
-          type="button"
-          onClick={handleOracleSuggest}
+  return (
+    <View style={styles.formCard}>
+      {/* Decorative corners */}
+      <View style={[styles.corner, { top: 0, left: 0, borderTopWidth: 1, borderLeftWidth: 1 }]} />
+      <View style={[styles.corner, { top: 0, right: 0, borderTopWidth: 1, borderRightWidth: 1 }]} />
+      <View style={[styles.corner, { bottom: 0, left: 0, borderBottomWidth: 1, borderLeftWidth: 1 }]} />
+      <View style={[styles.corner, { bottom: 0, right: 0, borderBottomWidth: 1, borderRightWidth: 1 }]} />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.titleRow}>
+          <Feather size={14} color={COLORS.gothicGold} />
+          <Text style={styles.titleText}>Inscribe Penance Vow</Text>
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.oracleBtn, isOracleLoading && { opacity: 0.6 }]} 
+          onPress={handleOracleSuggest}
           disabled={isOracleLoading}
-          className={`relative flex items-center gap-1.5 px-3.5 py-1.5 bg-gothic-gold/10 hover:bg-gothic-gold/25 text-gothic-gold border border-gothic-gold/30 hover:border-gothic-gold rounded-xl text-[9px] font-mono uppercase tracking-widest cursor-pointer transition-all duration-300 select-none ${
-            isOracleLoading ? 'animate-pulse opacity-60 cursor-wait bg-gothic-gold/5' : ''
-          }`}
-          title="Translates thy simple prompt into peak atmospheric gothic narratives"
         >
           {isOracleLoading ? (
-            <>
-              <span className="w-2.5 h-2.5 border-2 border-gothic-gold border-t-transparent rounded-full animate-spin flex-shrink-0" />
-              Chanting Spell...
-            </>
+            <ActivityIndicator size="small" color={COLORS.gothicGold} />
           ) : (
-            <>
-              <span className="text-[10px]">🔮</span>
-              Oracle Translate (AI)
-            </>
+            <Text style={styles.oracleBtnText}>🔮 ORACLE TRANSLATE</Text>
           )}
-        </button>
-      </div>
+        </TouchableOpacity>
+      </View>
 
-      {oracleError && (
-        <div className="mb-4 p-2.5 bg-gothic-back border border-gothic-crimson/50 text-gothic-crimson rounded-lg text-[10px] font-mono uppercase tracking-wide leading-relaxed animate-bounce">
-          ✦ Oracle Whisper: {oracleError}
-        </div>
-      )}
+      {oracleError ? (
+        <View style={styles.oracleErrorBox}>
+          <Text style={styles.oracleErrorText}>✦ Whisper: {oracleError}</Text>
+        </View>
+      ) : null}
 
-      {/* Quest Title Input */}
-      <div className="mb-4">
-        <label className="block text-[10px] font-mono uppercase tracking-widest text-gray-500 mb-1.5">
-          Vow Declaration / Task Title *
-        </label>
-        <input
-          id="quest-title-input"
-          type="text"
-          required
-          maxLength={80}
+      {/* Title */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>VOW DECLARATION / TASK TITLE *</Text>
+        <TextInput
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChangeText={setTitle}
+          style={styles.textInput}
           placeholder="E.g., Cleanse the study altar, defeat the email hoard..."
-          className="w-full bg-gothic-back/80 border border-gothic-border hover:border-gothic-gold-dim focus:border-gothic-gold rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none transition-all duration-300"
+          placeholderTextColor={COLORS.gray700}
         />
-      </div>
+      </View>
 
-      {/* Quest Description Input */}
-      <div className="mb-4">
-        <label className="block text-[10px] font-mono uppercase tracking-widest text-gray-500 mb-1.5">
-          Grave Narrative Details
-        </label>
-        <textarea
-          id="quest-desc-input"
+      {/* Description */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>GRAVE NARRATIVE DETAILS</Text>
+        <TextInput
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChangeText={setDescription}
+          multiline
+          numberOfLines={3}
+          style={[styles.textInput, { height: 60, textAlignVertical: 'top' }]}
           placeholder="E.g., Perform with high precision to earn the title of the absolved..."
-          className="w-full bg-gothic-back/80 border border-gothic-border hover:border-gothic-gold-dim focus:border-gothic-gold rounded-lg px-4 py-2 text-xs text-gray-200 placeholder:text-gray-600 focus:outline-none transition-all duration-300 h-20 resize-none"
+          placeholderTextColor={COLORS.gray700}
         />
-      </div>
+      </View>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-        {/* Difficulty */}
-        <div>
-          <label className="block text-[10px] font-mono uppercase tracking-widest text-gray-500 mb-1.5">
-            Severity / Difficulty
-          </label>
-          <select
-            id="quest-difficulty-select"
-            value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value as QuestDifficulty)}
-            className="w-full bg-gothic-back/80 border border-gothic-border focus:border-gothic-gold rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none cursor-pointer"
-          >
-            <option value="Lesser Burden" className="bg-gothic-card text-gray-300">Lesser Burden (Easy)</option>
-            <option value="Sinuous Vow" className="bg-gothic-card text-gray-300">Sinuous Vow (Medium)</option>
-            <option value="Mortal Penance" className="bg-gothic-card text-gray-300">Mortal Penance (Hard)</option>
-          </select>
-        </div>
+      {/* Difficulty segment selector */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>SEVERITY / DIFFICULTY</Text>
+        <View style={styles.segmentRow}>
+          {difficulties.map(diff => {
+            const isSelected = difficulty === diff;
+            return (
+              <TouchableOpacity
+                key={diff}
+                style={[
+                  styles.segmentBtn,
+                  isSelected && { borderColor: COLORS.gothicGold, backgroundColor: 'rgba(200, 158, 92, 0.15)' }
+                ]}
+                onPress={() => { soundEngine.playClick(); setDifficulty(diff); }}
+              >
+                <Text style={[styles.segmentBtnText, isSelected && { color: COLORS.gothicGold, fontWeight: 'bold' }]}>
+                  {diff}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
-        {/* Category */}
-        <div>
-          <label className="block text-[10px] font-mono uppercase tracking-widest text-gray-500 mb-1.5">
-            Quest Covenant
-          </label>
-          <select
-            id="quest-category-select"
-            value={category}
-            onChange={(e) => setCategory(e.target.value as QuestCategory)}
-            className="w-full bg-gothic-back/80 border border-gothic-border focus:border-gothic-gold rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none cursor-pointer"
-          >
-            <option value="General" className="bg-gothic-card text-gray-300">🕈 General Duty</option>
-            <option value="Vow" className="bg-gothic-card text-gray-300">⛧ Daily Vow</option>
-            <option value="Trial" className="bg-gothic-card text-gray-300">⚔ Weekly Trial</option>
-            <option value="Crusade" className="bg-gothic-card text-gray-300">♃ Epic Crusade</option>
-          </select>
-        </div>
+      {/* Category segment selector */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>QUEST COVENANT</Text>
+        <View style={styles.segmentRow}>
+          {categories.map(cat => {
+            const isSelected = category === cat;
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={[
+                  styles.segmentBtn,
+                  isSelected && { borderColor: COLORS.gothicGold, backgroundColor: 'rgba(200, 158, 92, 0.15)' }
+                ]}
+                onPress={() => { soundEngine.playClick(); setCategory(cat); }}
+              >
+                <Text style={[styles.segmentBtnText, isSelected && { color: COLORS.gothicGold, fontWeight: 'bold' }]}>
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
-        {/* Due Date */}
-        <div>
-          <label className="block text-[10px] font-mono uppercase tracking-widest text-gray-500 mb-1.5">
-            Hour of Judgment (Due)
-          </label>
-          <input
-            id="quest-duedate-input"
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="w-full bg-gothic-back/80 border border-gothic-border focus:border-gothic-gold rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none cursor-pointer"
-          />
-        </div>
-      </div>
+      {/* Due Date */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>HOUR OF JUDGMENT (YYYY-MM-DD)</Text>
+        <TextInput
+          value={dueDate}
+          onChangeText={setDueDate}
+          style={styles.textInput}
+          placeholder="e.g. 2026-07-07"
+          placeholderTextColor={COLORS.gray700}
+        />
+      </View>
 
       {/* Submit Button */}
-      <motion.button
-        id="submit-quest-btn"
-        type="submit"
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        className="w-full py-3 rounded-lg bg-gradient-to-r from-gothic-crimson to-red-800 hover:from-gothic-gold hover:to-amber-500 text-white hover:text-black font-cinzel font-bold tracking-widest text-xs border border-gothic-border hover:border-black cursor-pointer transition-colors duration-500 flex items-center justify-center gap-2"
-      >
-        <Skull className="w-4 h-4 animate-pulse" />
-        INSCRIBE IN BLOOD
-      </motion.button>
-    </form>
+      <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
+        <Skull size={14} color="#fff" />
+        <Text style={styles.submitBtnText}>INSCRIBE IN BLOOD</Text>
+      </TouchableOpacity>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  formCard: {
+    width: '100%',
+    backgroundColor: COLORS.gothicCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    padding: 16,
+    position: 'relative',
+    marginVertical: 10,
+  },
+  corner: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderColor: COLORS.gothicGold,
+    opacity: 0.3,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.2)',
+    paddingBottom: 10,
+    marginBottom: 12,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  titleText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  oracleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.4)',
+    backgroundColor: 'rgba(200, 158, 92, 0.1)',
+  },
+  oracleBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicGold,
+    letterSpacing: 0.5,
+  },
+  oracleErrorBox: {
+    padding: 8,
+    backgroundColor: 'rgba(164, 44, 56, 0.1)',
+    borderColor: 'rgba(164, 44, 56, 0.3)',
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  oracleErrorText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicCrimson,
+    textTransform: 'uppercase',
+  },
+  inputGroup: {
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray500,
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  textInput: {
+    width: '100%',
+    height: 38,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    color: '#fff',
+    fontSize: 12.5,
+    fontFamily: FONTS.sans,
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  segmentBtn: {
+    flex: 1,
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    backgroundColor: COLORS.gothicDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+  },
+  submitBtn: {
+    width: '100%',
+    height: 40,
+    backgroundColor: COLORS.gothicCrimson,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  submitBtnText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: 'bold',
+    letterSpacing: 1.5,
+  }
+});
+export default CreateQuestForm;

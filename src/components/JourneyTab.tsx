@@ -1,24 +1,12 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Skull, 
-  Flame, 
-  Compass, 
-  ShieldAlert, 
-  CheckCircle2, 
-  HelpCircle, 
-  Eye, 
-  Inbox,
-  BookOpen,
-  Volume2,
-  VolumeX,
-} from 'lucide-react';
-import { Quest, QuestDifficulty, QuestCategory } from '../types';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { BookOpen, Skull } from 'lucide-react-native';
+import { Quest } from '../types';
 import { ProceduralRuinBanner } from './ProceduralRuinBanner';
 import { GothicQuestItem } from './GothicQuestItem';
-import { soundEngine } from '../utils/audio';
 import { getTodayLocalDateString } from '../utils/dateUtils';
 import { DayContext } from '../utils/contextAwareEngine';
+import { COLORS, FONTS } from '../theme';
 
 interface JourneyTabProps {
   quests: Quest[];
@@ -41,8 +29,6 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
 }) => {
   const todayStr = getTodayLocalDateString();
 
-  // Filters Today's agenda: only overdue tasks AND tasks that are strictly due today
-  // No future tasks are shown here!
   const overdueQuests = quests.filter(q => !q.completed && q.dueDate && q.dueDate < todayStr);
   const todayQuests = quests.filter(q => q.dueDate === todayStr);
   const perpetualQuests = quests.filter(q => !q.dueDate && !q.completed);
@@ -50,16 +36,10 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
     q => q.completed && (q.dueDate === todayStr || (!q.dueDate && q.createdAt?.startsWith(todayStr)))
   );
 
-  // Pool all matching items going onto Today's schedule
   const activeTodayPool = [...overdueQuests, ...todayQuests, ...perpetualQuests];
 
-  // Group agenda as per Priority Specification:
-  // - High Priority: Overdue penance-level quests, PLUS any 'Mortal Penance' (Hard) or Habit-type quests due today
-  // - Medium Priority: Standard difficulty 'Sinuous Vow' (Medium) quests due today
-  // - Optional: 'Lesser Burden' (Easy) quests due today or loose perpetual vows
-  
   const highPriority = activeTodayPool.filter(q => 
-    (q.dueDate && q.dueDate < todayStr) || // Overdue is always High Priority
+    (q.dueDate && q.dueDate < todayStr) || 
     q.difficulty === 'Mortal Penance'
   );
 
@@ -70,13 +50,13 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
 
   const optionalPriority = activeTodayPool.filter(q => 
     (q.dueDate === todayStr && q.difficulty === 'Lesser Burden') ||
-    (!q.dueDate) // Perpetual/loose devotions are Optional
+    (!q.dueDate)
   );
 
   const completedTodayList = completedTodayQuests;
 
   return (
-    <div className="space-y-8" id="journey-tab-viewport">
+    <ScrollView style={styles.viewport} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
       
       {/* 1. Daily Procedural Ancient Ruin Hero Banner */}
       <ProceduralRuinBanner 
@@ -85,179 +65,291 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
         streak={streak}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* 2. Quote of the Hour Card */}
+      <View style={styles.quoteCard}>
+        <View style={[styles.corner, { top: 0, left: 0, borderTopWidth: 1, borderLeftWidth: 1 }]} />
+        <View style={[styles.corner, { bottom: 0, right: 0, borderBottomWidth: 1, borderRightWidth: 1 }]} />
         
-        {/* COLUMN 1: Ambient Liturgical Quote (Left Column) */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
+        <View style={styles.quoteHeader}>
+          <BookOpen size={13} color={COLORS.gothicGold} />
+          <Text style={styles.quoteTitle}>Liturgy of Penance</Text>
+        </View>
+        
+        <Text style={styles.quoteText}>"{randomQuote.text}"</Text>
+        <Text style={styles.quoteAuthor}>— {randomQuote.author}</Text>
+      </View>
 
-          {/* Liturgical quote of the hour card */}
-          <div className="p-5 bg-gothic-card rounded-2xl border border-gothic-border relative overflow-hidden flex flex-col justify-between min-h-[160px] text-left">
-            <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-gothic-gold/30" />
-            <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r border-gothic-gold/30" />
-            
-            <div className="flex items-start gap-1.5 text-gothic-gold-dim">
-              <BookOpen className="w-3.5 h-3.5 mt-0.5" />
-              <span className="font-cinzel text-[9.5px] uppercase tracking-widest font-bold">Liturgy of Penance</span>
-            </div>
-            
-            <blockquote className="font-cinzel text-xs text-gray-400 italic mt-3 line-clamp-3 leading-relaxed">
-              "{randomQuote.text}"
-            </blockquote>
-            
-            <cite className="block text-right font-mono text-[8px] text-gothic-gold uppercase mt-2">
-              — {randomQuote.author}
-            </cite>
-          </div>
-        </div>
+      {/* 3. Today's Agenda Panel */}
+      <View style={styles.agendaCard}>
+        <View style={styles.agendaHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.agendaHeaderTitle}>⚔ TODAY'S SACRED AGENDA</Text>
+            <Text style={styles.agendaHeaderSubtitle}>
+              Secure thy daily absolution, Ashen Knight. No future shadows are shown here.
+            </Text>
+          </View>
+          <View style={styles.boundsBadge}>
+            <Text style={styles.boundsBadgeText}>{activeTodayPool.length} Active Bounds</Text>
+          </View>
+        </View>
 
-        {/* COLUMN 2 & 3: Today's Agenda Grouped Lists */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          <div className="p-6 bg-gothic-card rounded-2xl border border-gothic-border relative overflow-hidden min-h-[420px]" id="journey-agenda-panel">
-            {/* Header */}
-            <div className="border-b border-gothic-border/40 pb-4 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-left">
-              <div>
-                <h3 className="font-cinzel text-sm sm:text-base font-bold tracking-widest text-gothic-gold uppercase flex items-center gap-2">
-                  ⚔ TODAY'S SACRED AGENDA
-                </h3>
-                <p className="font-mono text-gray-500 text-[9px] uppercase tracking-widest mt-1.5">
-                  Secure thy daily absolution, Ashen Knight. No future shadows are shown here.
-                </p>
-              </div>
+        <View style={styles.agendaContent}>
+          {/* HIGH PRIORITY */}
+          {highPriority.length > 0 && (
+            <View style={styles.prioritySection}>
+              <View style={[styles.priorityHeaderRow, { borderBottomColor: 'rgba(164, 44, 56, 0.15)' }]}>
+                <Text style={[styles.priorityTitle, { color: COLORS.gothicCrimson }]}>💀 HIGH PRIORITY BOUNDS</Text>
+                <Text style={styles.priorityBadgeText}>{highPriority.length} Duty</Text>
+              </View>
+              <View style={styles.questItemsList}>
+                {highPriority.map(q => (
+                  <GothicQuestItem 
+                    key={q.id}
+                    quest={q}
+                    onComplete={onCompleteQuest}
+                    onDelete={onDeleteQuest}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
 
-              <div className="font-mono text-[9.5px] text-gray-400 bg-gothic-back/50 px-2.5 py-0.5 rounded border border-gothic-border/20 uppercase tracking-widest">
-                {activeTodayPool.length} Active Bounds
-              </div>
-            </div>
+          {/* MEDIUM PRIORITY */}
+          {mediumPriority.length > 0 && (
+            <View style={styles.prioritySection}>
+              <View style={[styles.priorityHeaderRow, { borderBottomColor: 'rgba(200, 158, 92, 0.15)' }]}>
+                <Text style={[styles.priorityTitle, { color: COLORS.gothicGold }]}>🔥 MEDIUM PRIORITY COVENANTS</Text>
+                <Text style={styles.priorityBadgeText}>{mediumPriority.length} Duty</Text>
+              </View>
+              <View style={styles.questItemsList}>
+                {mediumPriority.map(q => (
+                  <GothicQuestItem 
+                    key={q.id}
+                    quest={q}
+                    onComplete={onCompleteQuest}
+                    onDelete={onDeleteQuest}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
 
-            {/* Agenda groups list */}
-            <div className="space-y-6 text-left">
-              
-              {/* 1. HIGH PRIORITY */}
-              {highPriority.length > 0 && (
-                <div id="agenda-high-priority">
-                  <div className="flex justify-between items-center border-b border-red-500/10 pb-1.5 mb-3 select-none">
-                    <span className="font-cinzel text-[10px] font-bold tracking-widest text-gothic-crimson uppercase flex items-center gap-1">
-                      💀 HIGH PRIORITY BOUNDS
-                    </span>
-                    <span className="font-mono text-[8px] text-gray-500 uppercase bg-gothic-back/40 px-1.5 py-0.2 rounded border border-gothic-border/10">
-                      {highPriority.length} Duty
-                    </span>
-                  </div>
+          {/* OPTIONAL */}
+          {optionalPriority.length > 0 && (
+            <View style={styles.prioritySection}>
+              <View style={[styles.priorityHeaderRow, { borderBottomColor: 'rgba(56, 189, 248, 0.15)' }]}>
+                <Text style={[styles.priorityTitle, { color: COLORS.gothicSky }]}>⏳ OPTIONAL & PERPETUAL DEVOTIONS</Text>
+                <Text style={styles.priorityBadgeText}>{optionalPriority.length} Duty</Text>
+              </View>
+              <View style={styles.questItemsList}>
+                {optionalPriority.map(q => (
+                  <GothicQuestItem 
+                    key={q.id}
+                    quest={q}
+                    onComplete={onCompleteQuest}
+                    onDelete={onDeleteQuest}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
 
-                  <div className="flex flex-col gap-2.5">
-                    {highPriority.map(q => (
-                      <GothicQuestItem 
-                        key={q.id}
-                        quest={q}
-                        onComplete={onCompleteQuest}
-                        onDelete={onDeleteQuest}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+          {/* COMPLETED TODAY */}
+          {completedTodayList.length > 0 && (
+            <View style={[styles.prioritySection, { opacity: 0.6 }]}>
+              <View style={[styles.priorityHeaderRow, { borderBottomColor: 'rgba(46, 50, 62, 0.25)' }]}>
+                <Text style={styles.completedTitle}>✦ ABSOLVED TODAY</Text>
+                <Text style={styles.priorityBadgeText}>{completedTodayList.length} Absolved</Text>
+              </View>
+              <View style={styles.questItemsList}>
+                {completedTodayList.map(q => (
+                  <GothicQuestItem 
+                    key={q.id}
+                    quest={q}
+                    onComplete={onCompleteQuest}
+                    onDelete={onDeleteQuest}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
 
-              {/* 2. MEDIUM PRIORITY */}
-              {mediumPriority.length > 0 && (
-                <div id="agenda-medium-priority">
-                  <div className="flex justify-between items-center border-b border-gothic-gold/15 pb-1.5 mb-3 select-none">
-                    <span className="font-cinzel text-[10px] font-bold tracking-widest text-gothic-gold uppercase flex items-center gap-1">
-                      🔥 MEDIUM PRIORITY COVENANTS
-                    </span>
-                    <span className="font-mono text-[8px] text-gray-500 uppercase bg-gothic-back/40 px-1.5 py-0.2 rounded border border-gothic-border/10">
-                      {mediumPriority.length} Duty
-                    </span>
-                  </div>
+          {/* EMPTY STATE */}
+          {activeTodayPool.length === 0 && completedTodayList.length === 0 && (
+            <View style={styles.emptyCard}>
+              <Skull size={32} color={COLORS.gray600} style={{ marginBottom: 12 }} />
+              <Text style={styles.emptyTitle}>The altar finds absolute rest</Text>
+              <Text style={styles.emptyDesc}>
+                You have no active covenants, vows or overdue trials allocated for this hour-day of assessment. Return to the Forge to create a new crusade!
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
 
-                  <div className="flex flex-col gap-2.5">
-                    {mediumPriority.map(q => (
-                      <GothicQuestItem 
-                        key={q.id}
-                        quest={q}
-                        onComplete={onCompleteQuest}
-                        onDelete={onDeleteQuest}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 3. OPTIONAL */}
-              {optionalPriority.length > 0 && (
-                <div id="agenda-optional">
-                  <div className="flex justify-between items-center border-b border-gothic-border/30 pb-1.5 mb-3 select-none">
-                    <span className="font-cinzel text-[10px] font-bold tracking-widest text-gothic-sky uppercase flex items-center gap-1">
-                      ⏳ OPTIONAL & PERPETUAL DEVOTIONS
-                    </span>
-                    <span className="font-mono text-[8px] text-gray-500 uppercase bg-gothic-back/40 px-1.5 py-0.2 rounded border border-gothic-border/10">
-                      {optionalPriority.length} Duty
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col gap-2.5">
-                    {optionalPriority.map(q => (
-                      <GothicQuestItem 
-                        key={q.id}
-                        quest={q}
-                        onComplete={onCompleteQuest}
-                        onDelete={onDeleteQuest}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 4. COMPLETED TODAY */}
-              {completedTodayList.length > 0 && (
-                <div id="agenda-completed-today">
-                  <div className="flex justify-between items-center border-b border-gothic-border/30 pb-1.5 mb-3 select-none opacity-60">
-                    <span className="font-cinzel text-[10px] font-bold tracking-widest text-gothic-gold-dim uppercase flex items-center gap-1">
-                      ✦ ABSOLVED TODAY
-                    </span>
-                    <span className="font-mono text-[8px] text-gray-500 uppercase bg-gothic-back/40 px-1.5 py-0.2 rounded border border-gothic-border/10">
-                      {completedTodayList.length} Absolved
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col gap-2.5 opacity-60">
-                    {completedTodayList.map(q => (
-                      <GothicQuestItem 
-                        key={q.id}
-                        quest={q}
-                        onComplete={onCompleteQuest}
-                        onDelete={onDeleteQuest}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* EMPTY STATE */}
-              {activeTodayPool.length === 0 && completedTodayList.length === 0 && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-20 flex flex-col items-center justify-center border-2 border-dashed border-gothic-border/40 rounded-xl"
-                  id="agenda-empty-state"
-                >
-                  <Skull className="w-8 h-8 text-gray-600 mb-3 animate-bounce" />
-                  <p className="font-cinzel text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    The altar finds absolute rest
-                  </p>
-                  <p className="font-mono text-[9px] text-gray-600 uppercase mt-1 tracking-widest max-w-sm mx-auto leading-normal">
-                    You have no active covenants, vows or overdue trials allocated for this hour-day of assessment. Return to the Forge to create a new crusade!
-                  </p>
-                </motion.div>
-              )}
-
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
+    </ScrollView>
   );
 };
+
+const styles = StyleSheet.create({
+  viewport: {
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  quoteCard: {
+    padding: 16,
+    backgroundColor: COLORS.gothicCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    marginVertical: 12,
+    position: 'relative',
+  },
+  corner: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderColor: COLORS.gothicGold,
+    opacity: 0.35,
+  },
+  quoteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  quoteTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 9.5,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  quoteText: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 12,
+    color: COLORS.gray400,
+    fontStyle: 'italic',
+    lineHeight: 18,
+    marginTop: 10,
+  },
+  quoteAuthor: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gothicGold,
+    textAlign: 'right',
+    textTransform: 'uppercase',
+    marginTop: 8,
+    letterSpacing: 0.5,
+  },
+  agendaCard: {
+    backgroundColor: COLORS.gothicCard,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 16,
+    padding: 16,
+  },
+  agendaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.25)',
+    paddingBottom: 12,
+    marginBottom: 16,
+  },
+  agendaHeaderTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 12.5,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 1,
+  },
+  agendaHeaderSubtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+    marginTop: 4,
+    lineHeight: 12,
+  },
+  boundsBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(46, 50, 62, 0.3)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  boundsBadgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray400,
+    textTransform: 'uppercase',
+  },
+  agendaContent: {
+    gap: 20,
+  },
+  prioritySection: {
+    gap: 8,
+  },
+  priorityHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    paddingBottom: 4,
+  },
+  priorityTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  completedTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: COLORS.gray500,
+    letterSpacing: 0.5,
+  },
+  priorityBadgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+  },
+  questItemsList: {
+    gap: 6,
+  },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(46, 50, 62, 0.4)',
+    borderRadius: 12,
+  },
+  emptyTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11.5,
+    fontWeight: 'bold',
+    color: COLORS.gray500,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  emptyDesc: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray600,
+    textAlign: 'center',
+    marginTop: 6,
+    maxWidth: 260,
+    lineHeight: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  }
+});
+export default JourneyTab;
