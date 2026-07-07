@@ -127,7 +127,120 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
     setErrorStatus('');
     try {
       const user = await signInWithPassword(email, password);
-      const userData = await loadUserBundle(user.id, user.email || email);
+      const userData = await loadUserBundle(user.id, user.email || email, user.user_metadata);
+
+      if (!userData.characterProfile) {
+        // Build initial character details
+        const userId = user.id;
+        const signupDate = new Date().toISOString();
+        const geometrySeed = Math.floor(Math.random() * 10000000);
+        const monumentSeed = `monument-${userId}-${Math.floor(Math.random() * 999999)}`;
+        const startingTitle = userData.preferred_name ? userData.preferred_name : "The Wanderer";
+
+        const characterProfile = {
+          id: userId,
+          name: userData.display_name || email.split('@')[0],
+          title: startingTitle,
+          xp: 0,
+          accountCreated: signupDate,
+          preferredName: userData.preferred_name || "The Wanderer",
+          dateOfBirth: userData.date_of_birth || "",
+          timezone: userData.timezone || "UTC",
+          avatarSeed: String(geometrySeed),
+          monumentSeed: monumentSeed,
+          created_at: signupDate,
+          stats: {
+            strength: 10,
+            endurance: 10,
+            discipline: 10,
+            recovery: 10,
+            focus: 10,
+            consistency: 10,
+            learningSpeed: 10,
+            resilience: 10,
+            programming: 10,
+            mathematics: 10,
+            finance: 10,
+            communication: 10,
+            creativity: 10,
+            leadership: 10,
+            networking: 10,
+            collaboration: 10
+          },
+          chronicle: [
+            {
+              id: `chron-init-${Date.now()}`,
+              timeframe: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
+              bullets: [
+                `Entered the domain of ICARUS as ${userData.display_name || email.split('@')[0]} (${startingTitle}).`,
+                `Swore initial mental and physical covenants under starting seed ${geometrySeed}.`
+              ]
+            }
+          ],
+          skillTrees: [
+            {
+              category: 'Programming',
+              nodes: [
+                { id: 'prog-fund', name: 'Programming Fundamentals', description: 'Core principles: logic, types, flow controls', level: 0, maxLevel: 1, status: 'available', xp: 0, requiredXp: 100, prerequisites: [] },
+                { id: 'prog-java', name: 'Java Sanctuary', description: 'Strong, robust types & compilations', level: 0, maxLevel: 3, status: 'locked', xp: 0, requiredXp: 200, prerequisites: ['prog-fund'] },
+                { id: 'prog-oop', name: 'OOP & Collections', description: 'Polymorphism and efficient structures', level: 0, maxLevel: 3, status: 'locked', xp: 0, requiredXp: 300, prerequisites: ['prog-java'] },
+                { id: 'prog-spring', name: 'Spring Boot Castle', description: 'Enterprise backend orchestration', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 500, prerequisites: ['prog-oop'] },
+                { id: 'prog-front', name: 'Frontend Guild', description: 'Inscribing direct canvas styles: HTML & CSS', level: 0, maxLevel: 1, status: 'locked', xp: 0, requiredXp: 150, prerequisites: ['prog-fund'] },
+                { id: 'prog-react', name: 'React Componentry', description: 'Unifying flows with UI hooks and state', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 350, prerequisites: ['prog-front'] },
+                { id: 'prog-next', name: 'NextJS Realm', description: 'Server-side pre-rendering & asset portals', level: 0, maxLevel: 4, status: 'locked', xp: 0, requiredXp: 450, prerequisites: ['prog-react'] },
+                { id: 'prog-ai', name: 'AI Engineering', description: 'Communicating with celestial neural oracles', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 500, prerequisites: ['prog-fund'] }
+              ]
+            },
+            {
+              category: 'Fitness',
+              nodes: [
+                { id: 'fit-will', name: 'Ritual of Will', description: 'Initiating physical focus parameters', level: 0, maxLevel: 1, status: 'available', xp: 0, requiredXp: 100, prerequisites: [] },
+                { id: 'fit-run', name: 'Swift Sentinel Running', description: 'Enhance heart longevity & aerobic speed', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 200, prerequisites: ['fit-will'] },
+                { id: 'fit-strength', name: 'Iron Forging', description: 'Power training, compound weights and calisthenics', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 250, prerequisites: ['fit-will'] },
+                { id: 'fit-mobility', name: 'Shadow Reflexes', description: 'Stretching, joints, and spine protection guidance', level: 0, maxLevel: 3, status: 'locked', xp: 0, requiredXp: 180, prerequisites: ['fit-will'] },
+                { id: 'fit-nutrition', name: 'Herbology Alchemy', description: 'Proper fasting windows and metabolic clean intake', level: 0, maxLevel: 3, status: 'locked', xp: 0, requiredXp: 200, prerequisites: ['fit-will'] }
+              ]
+            },
+            {
+              category: 'Personal Development',
+              nodes: [
+                { id: 'dev-wake', name: 'Dawn Vigil', description: 'Conquer early morning shadows', level: 0, maxLevel: 1, status: 'available', xp: 0, requiredXp: 100, prerequisites: [] },
+                { id: 'dev-time', name: 'Hour Dial Management', description: 'Rigid blocks of deep focused concentration', level: 0, maxLevel: 4, status: 'locked', xp: 0, requiredXp: 180, prerequisites: ['dev-wake'] },
+                { id: 'dev-read', name: 'Scroll Reading studies', description: 'Continuous absorption of mystical volumes', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 150, prerequisites: ['dev-wake'] },
+                { id: 'dev-habit', name: 'Chain of Iron Habits', description: 'Lock in standard repetition frequencies', level: 0, maxLevel: 5, status: 'locked', xp: 0, requiredXp: 200, prerequisites: ['dev-wake'] },
+                { id: 'dev-journal', name: 'Annals Inscription', description: 'Daily journaling & high spiritual reflecting', level: 0, maxLevel: 3, status: 'locked', xp: 0, requiredXp: 120, prerequisites: ['dev-wake'] }
+              ]
+            }
+          ],
+          achievements: [
+            { id: 'ach-first', name: 'First Liturgical Duty', description: 'Inscribe and complete your very first Vow.', category: 'Discipline', rarity: 'Common', unlocked: false },
+            { id: 'ach-habit-heavy', name: 'Alchemical Crusader', description: 'Survive a 40-Day continuous Habit Cycle without break.', category: 'Productivity', rarity: 'Epic', unlocked: false },
+            { id: 'ach-gym-god', name: 'Vessel of Agony', description: 'Demonstrate supreme athletic grit under hard trial severe burdens.', category: 'Fitness', rarity: 'Legendary', unlocked: false },
+            { id: 'ach-react-m', name: 'Developer Guild Master', description: 'Fully master Frontend or AI components inside Programming.', category: 'Learning', rarity: 'Rare', unlocked: false },
+            { id: 'ach-fire-k', name: 'bonfire Guardian', description: 'Gather and maintain high streak counts above 10.', category: 'Discipline', rarity: 'Common', unlocked: false },
+            { id: 'ach-complete-all', name: 'The Miracle Absolute', description: 'Earn 30,000 XP in your records.', category: 'Mastery', rarity: 'Mythic', unlocked: false }
+          ],
+          earnedTitles: [startingTitle],
+          streak: 0
+        };
+
+        const newUserPayload = {
+          ...userData,
+          characterProfile,
+          title: startingTitle,
+          avatar_seed: String(geometrySeed),
+          monument_seed: monumentSeed,
+          created_at: signupDate
+        };
+
+        await saveUserProfile(newUserPayload);
+
+        soundEngine.playQuestInscribe();
+        setRegisteredUserResponse(newUserPayload);
+        setCharGenStep(0);
+        setMode('GENERATING_CHAR');
+        return;
+      }
 
       soundEngine.playQuestIgnite();
       onLoginSuccess(userData);
@@ -161,7 +274,14 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
 
     setIsLoading(true);
     try {
-      const user = await signUpWithPassword(email, password);
+      const metadata = {
+        display_name: displayName,
+        preferred_name: preferredName || "",
+        date_of_birth: dateOfBirth || "",
+        timezone: timezone || "UTC"
+      };
+
+      const { user, session } = await signUpWithPassword(email, password, metadata);
       const userId = user.id;
       const signupDate = new Date().toISOString();
 
@@ -274,6 +394,12 @@ export const IcarusAuthPortal: React.FC<IcarusAuthPortalProps> = ({ onLoginSucce
         goals: [],
         characterProfile
       };
+
+      if (!session) {
+        setSuccessMessage('A verification link has been sent to thy email. Confirm it to activate thy soul, then log in.');
+        setMode('LOGIN');
+        return;
+      }
 
       await saveUserProfile(newUserPayload);
 

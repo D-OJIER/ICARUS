@@ -75,11 +75,26 @@ const userRow = (user: Partial<IcarusUserData>) => ({
   account_created: user.created_at || user.characterProfile?.accountCreated || new Date().toISOString()
 });
 
-export async function signUpWithPassword(email: string, password: string) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+export async function signUpWithPassword(
+  email: string,
+  password: string,
+  metadata?: {
+    display_name: string;
+    preferred_name?: string;
+    date_of_birth?: string;
+    timezone?: string;
+  }
+) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: metadata
+    }
+  });
   if (error) throw error;
   if (!data.user) throw new Error('Registration did not return a user.');
-  return data.user;
+  return { user: data.user, session: data.session };
 }
 
 export async function signInWithPassword(email: string, password: string) {
@@ -99,9 +114,9 @@ export async function signOutOfSupabase() {
   if (error) throw error;
 }
 
-export async function loadUserBundle(userId: string, email = ''): Promise<IcarusUserData> {
+export async function loadUserBundle(userId: string, email = '', userMetadata: any = null): Promise<IcarusUserData> {
   const [{ data: profile, error: profileError }, { data: quests, error: questsError }, { data: goals, error: goalsError }] = await Promise.all([
-    supabase.from('users').select('*').eq('id', userId).single(),
+    supabase.from('users').select('*').eq('id', userId).maybeSingle(),
     supabase.from('quests').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
     supabase.from('goals').select('*').eq('user_id', userId).order('created_at', { ascending: false })
   ]);
@@ -109,6 +124,26 @@ export async function loadUserBundle(userId: string, email = ''): Promise<Icarus
   if (profileError) throw profileError;
   if (questsError) throw questsError;
   if (goalsError) throw goalsError;
+
+  if (!profile) {
+    return {
+      id: userId,
+      email: email,
+      display_name: userMetadata?.display_name || email.split('@')[0],
+      preferred_name: userMetadata?.preferred_name || '',
+      date_of_birth: userMetadata?.date_of_birth || '',
+      timezone: userMetadata?.timezone || 'UTC',
+      level: 1,
+      xp: 0,
+      title: userMetadata?.preferred_name || 'The Wanderer',
+      avatar_seed: '',
+      monument_seed: '',
+      created_at: new Date().toISOString(),
+      quests: [],
+      goals: [],
+      characterProfile: null
+    };
+  }
 
   return {
     id: userId,
