@@ -7,7 +7,8 @@ import {
   TextInput, 
   StyleSheet, 
   Dimensions, 
-  Platform 
+  Platform,
+  Modal
 } from 'react-native';
 import { 
   ChevronLeft, 
@@ -444,225 +445,227 @@ export const GothicCalendar: React.FC<GothicCalendarProps> = ({
       )}
 
       {/* DETAIL MODAL POPUP */}
-      {activeModalDate && (() => {
-        const dateStr = getLocalDateString(activeModalDate);
-        const allQuestsForDate = quests.filter(q => q.dueDate === dateStr);
-        const todayStrValue = getLocalDateString(new Date());
+      <Modal visible={!!activeModalDate} transparent animationType="slide">
+        {activeModalDate && (() => {
+          const dateStr = getLocalDateString(activeModalDate);
+          const allQuestsForDate = quests.filter(q => q.dueDate === dateStr);
+          const todayStrValue = getLocalDateString(new Date());
 
-        const completedList = allQuestsForDate.filter(q => q.completed);
-        const pendingList = allQuestsForDate.filter(q => !q.completed && dateStr >= todayStrValue);
-        const missedList = allQuestsForDate.filter(q => !q.completed && dateStr < todayStrValue);
+          const completedList = allQuestsForDate.filter(q => q.completed);
+          const pendingList = allQuestsForDate.filter(q => !q.completed && dateStr >= todayStrValue);
+          const missedList = allQuestsForDate.filter(q => !q.completed && dateStr < todayStrValue);
 
-        return (
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <View style={[styles.modalCorner, { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 }]} />
-              <View style={[styles.modalCorner, { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 }]} />
-              <View style={[styles.modalCorner, { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 }]} />
-              <View style={[styles.modalCorner, { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 }]} />
+          return (
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalCard}>
+                <View style={[styles.modalCorner, { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 }]} />
+                <View style={[styles.modalCorner, { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 }]} />
+                <View style={[styles.modalCorner, { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 }]} />
+                <View style={[styles.modalCorner, { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 }]} />
 
-              <View style={styles.modalHeaderRow}>
-                <View>
-                  <Text style={styles.modalHeaderTitle}>⚔ LITURGY LEDGER OF DEEDS</Text>
-                  <Text style={styles.modalHeaderDate}>
-                    {activeModalDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                  </Text>
-                </View>
-                <TouchableOpacity style={styles.modalHeaderClose} onPress={() => setActiveModalDate(null)}>
-                  <Text style={styles.modalHeaderCloseText}>ESC</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={{ flex: 1, marginVertical: 12 }} showsVerticalScrollIndicator={false}>
-                {/* 1. COMPLETED LIST */}
-                <View style={styles.listSection}>
-                  <Text style={styles.listSectionTitle}>In Communion Absolved ({completedList.length})</Text>
-                  {completedList.length > 0 ? (
-                    completedList.map(q => (
-                      <View key={q.id} style={styles.modalQuestItem}>
-                        <View style={styles.modalQuestRow}>
-                          <TouchableOpacity onPress={() => onToggleQuest(q.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                            <CheckCircle2 size={14} color={COLORS.gothicGold} />
-                            <Text style={styles.modalQuestTitleCompleted} numberOfLines={1}>{q.title}</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleToggleInspectQuest(q)} style={styles.inspectIcon}>
-                            <Eye size={12} color={COLORS.gray400} />
-                          </TouchableOpacity>
-                        </View>
-
-                        {activeInspectedQuestId === q.id && (
-                          <View style={styles.inspectPanel}>
-                            <Text style={styles.inspectLabel}>📜 LORE & NOTES</Text>
-                            <TextInput
-                              value={editNotesText}
-                              onChangeText={setEditNotesText}
-                              multiline
-                              style={styles.inspectNotesInput}
-                            />
-                            <TouchableOpacity style={styles.saveNotesBtn} onPress={() => handleSaveNotes(q)}>
-                              <Text style={styles.saveNotesBtnText}>Save Inscription</Text>
-                            </TouchableOpacity>
-
-                            <View style={styles.inspectRescheduleRow}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.inspectLabel}>RESCHEDULE</Text>
-                                <TextInput
-                                  value={editScheduleDate}
-                                  onChangeText={setEditScheduleDate}
-                                  style={styles.inspectDateInput}
-                                  placeholder="YYYY-MM-DD"
-                                  placeholderTextColor={COLORS.gray700}
-                                />
-                              </View>
-                              <TouchableOpacity style={styles.saveScheduleBtn} onPress={() => handleSaveSchedule(q)}>
-                                <Text style={styles.saveNotesBtnText}>SHIFT</Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.quietStatusText}>No covenants absolved today.</Text>
-                  )}
-                </View>
-
-                {/* 2. PENDING LIST */}
-                <View style={styles.listSection}>
-                  <Text style={[styles.listSectionTitle, { color: COLORS.gothicSky }]}>Solemn Trials Pending ({pendingList.length})</Text>
-                  {pendingList.length > 0 ? (
-                    pendingList.map(q => (
-                      <View key={q.id} style={styles.modalQuestItem}>
-                        <View style={styles.modalQuestRow}>
-                          <TouchableOpacity onPress={() => onToggleQuest(q.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                            <View style={styles.pendingIndicatorBox} />
-                            <Text style={styles.modalQuestTitlePending} numberOfLines={1}>{q.title}</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleToggleInspectQuest(q)} style={styles.inspectIcon}>
-                            <Eye size={12} color={COLORS.gray400} />
-                          </TouchableOpacity>
-                        </View>
-
-                        {activeInspectedQuestId === q.id && (
-                          <View style={styles.inspectPanel}>
-                            <Text style={styles.inspectLabel}>📜 LORE & NOTES</Text>
-                            <TextInput
-                              value={editNotesText}
-                              onChangeText={setEditNotesText}
-                              multiline
-                              style={styles.inspectNotesInput}
-                            />
-                            <TouchableOpacity style={styles.saveNotesBtn} onPress={() => handleSaveNotes(q)}>
-                              <Text style={styles.saveNotesBtnText}>Save Inscription</Text>
-                            </TouchableOpacity>
-
-                            <View style={styles.inspectRescheduleRow}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.inspectLabel}>RESCHEDULE</Text>
-                                <TextInput
-                                  value={editScheduleDate}
-                                  onChangeText={setEditScheduleDate}
-                                  style={styles.inspectDateInput}
-                                  placeholder="YYYY-MM-DD"
-                                  placeholderTextColor={COLORS.gray700}
-                                />
-                              </View>
-                              <TouchableOpacity style={styles.saveScheduleBtn} onPress={() => handleSaveSchedule(q)}>
-                                <Text style={styles.saveNotesBtnText}>SHIFT</Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.quietStatusText}>No pending solemn requirements mapped.</Text>
-                  )}
-                </View>
-
-                {/* 3. MISSED LIST */}
-                <View style={styles.listSection}>
-                  <Text style={[styles.listSectionTitle, { color: COLORS.gothicCrimson }]}>Corrupted / Missed Covenants ({missedList.length})</Text>
-                  {missedList.length > 0 ? (
-                    missedList.map(q => (
-                      <View key={q.id} style={styles.modalQuestItem}>
-                        <View style={styles.modalQuestRow}>
-                          <TouchableOpacity onPress={() => onToggleQuest(q.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                            <ShieldAlert size={14} color={COLORS.gothicCrimson} />
-                            <Text style={styles.modalQuestTitleMissed} numberOfLines={1}>{q.title}</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleToggleInspectQuest(q)} style={styles.inspectIcon}>
-                            <Eye size={12} color={COLORS.gray400} />
-                          </TouchableOpacity>
-                        </View>
-
-                        {activeInspectedQuestId === q.id && (
-                          <View style={styles.inspectPanel}>
-                            <Text style={styles.inspectLabel}>📜 LORE & NOTES</Text>
-                            <TextInput
-                              value={editNotesText}
-                              onChangeText={setEditNotesText}
-                              multiline
-                              style={styles.inspectNotesInput}
-                            />
-                            <TouchableOpacity style={styles.saveNotesBtn} onPress={() => handleSaveNotes(q)}>
-                              <Text style={styles.saveNotesBtnText}>Save Inscription</Text>
-                            </TouchableOpacity>
-
-                            <View style={styles.inspectRescheduleRow}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.inspectLabel}>RESCHEDULE</Text>
-                                <TextInput
-                                  value={editScheduleDate}
-                                  onChangeText={setEditScheduleDate}
-                                  style={styles.inspectDateInput}
-                                  placeholder="YYYY-MM-DD"
-                                  placeholderTextColor={COLORS.gray700}
-                                />
-                              </View>
-                              <TouchableOpacity style={styles.saveScheduleBtn} onPress={() => handleSaveSchedule(q)}>
-                                <Text style={styles.saveNotesBtnText}>SHIFT</Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={[styles.quietStatusText, { borderLeftColor: COLORS.gothicCrimson }]}>
-                      Clean record for today. Thy soul is free of broken bounds.
+                <View style={styles.modalHeaderRow}>
+                  <View>
+                    <Text style={styles.modalHeaderTitle}>⚔ LITURGY LEDGER OF DEEDS</Text>
+                    <Text style={styles.modalHeaderDate}>
+                      {activeModalDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                     </Text>
-                  )}
+                  </View>
+                  <TouchableOpacity style={styles.modalHeaderClose} onPress={() => setActiveModalDate(null)}>
+                    <Text style={styles.modalHeaderCloseText}>ESC</Text>
+                  </TouchableOpacity>
                 </View>
-              </ScrollView>
 
-              {/* Modal Footer */}
-              <View style={styles.modalFooter}>
-                <TouchableOpacity
-                  onPress={() => {
-                    soundEngine.playClick();
-                    onSelectDate(dateStr);
-                    setActiveModalDate(null);
-                    if (onNavigateToTab) {
-                      onNavigateToTab('The Path');
-                    }
-                  }}
-                  style={styles.modalFooterInscribeBtn}
-                >
-                  <Text style={styles.modalFooterInscribeBtnText}>Inscribe New Vow For Date</Text>
-                </TouchableOpacity>
+                <ScrollView style={{ flex: 1, marginVertical: 12 }} showsVerticalScrollIndicator={false}>
+                  {/* 1. COMPLETED LIST */}
+                  <View style={styles.listSection}>
+                    <Text style={styles.listSectionTitle}>In Communion Absolved ({completedList.length})</Text>
+                    {completedList.length > 0 ? (
+                      completedList.map(q => (
+                        <View key={q.id} style={styles.modalQuestItem}>
+                          <View style={styles.modalQuestRow}>
+                            <TouchableOpacity onPress={() => onToggleQuest(q.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                              <CheckCircle2 size={14} color={COLORS.gothicGold} />
+                              <Text style={styles.modalQuestTitleCompleted} numberOfLines={1}>{q.title}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleToggleInspectQuest(q)} style={styles.inspectIcon}>
+                              <Eye size={12} color={COLORS.gray400} />
+                            </TouchableOpacity>
+                          </View>
 
-                <TouchableOpacity
-                  onPress={() => { soundEngine.playClick(); setActiveModalDate(null); }}
-                  style={styles.modalFooterCloseBtn}
-                >
-                  <Text style={styles.modalFooterCloseBtnText}>Close Ledger</Text>
-                </TouchableOpacity>
+                          {activeInspectedQuestId === q.id && (
+                            <View style={styles.inspectPanel}>
+                              <Text style={styles.inspectLabel}>📜 LORE & NOTES</Text>
+                              <TextInput
+                                value={editNotesText}
+                                onChangeText={setEditNotesText}
+                                multiline
+                                style={styles.inspectNotesInput}
+                              />
+                              <TouchableOpacity style={styles.saveNotesBtn} onPress={() => handleSaveNotes(q)}>
+                                <Text style={styles.saveNotesBtnText}>Save Inscription</Text>
+                              </TouchableOpacity>
+
+                              <View style={styles.inspectRescheduleRow}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.inspectLabel}>RESCHEDULE</Text>
+                                  <TextInput
+                                    value={editScheduleDate}
+                                    onChangeText={setEditScheduleDate}
+                                    style={styles.inspectDateInput}
+                                    placeholder="YYYY-MM-DD"
+                                    placeholderTextColor={COLORS.gray700}
+                                  />
+                                </View>
+                                <TouchableOpacity style={styles.saveScheduleBtn} onPress={() => handleSaveSchedule(q)}>
+                                  <Text style={styles.saveNotesBtnText}>SHIFT</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.quietStatusText}>No covenants absolved today.</Text>
+                    )}
+                  </View>
+
+                  {/* 2. PENDING LIST */}
+                  <View style={styles.listSection}>
+                    <Text style={[styles.listSectionTitle, { color: COLORS.gothicSky }]}>Solemn Trials Pending ({pendingList.length})</Text>
+                    {pendingList.length > 0 ? (
+                      pendingList.map(q => (
+                        <View key={q.id} style={styles.modalQuestItem}>
+                          <View style={styles.modalQuestRow}>
+                            <TouchableOpacity onPress={() => onToggleQuest(q.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                              <View style={styles.pendingIndicatorBox} />
+                              <Text style={styles.modalQuestTitlePending} numberOfLines={1}>{q.title}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleToggleInspectQuest(q)} style={styles.inspectIcon}>
+                              <Eye size={12} color={COLORS.gray400} />
+                            </TouchableOpacity>
+                          </View>
+
+                          {activeInspectedQuestId === q.id && (
+                            <View style={styles.inspectPanel}>
+                              <Text style={styles.inspectLabel}>📜 LORE & NOTES</Text>
+                              <TextInput
+                                value={editNotesText}
+                                onChangeText={setEditNotesText}
+                                multiline
+                                style={styles.inspectNotesInput}
+                              />
+                              <TouchableOpacity style={styles.saveNotesBtn} onPress={() => handleSaveNotes(q)}>
+                                <Text style={styles.saveNotesBtnText}>Save Inscription</Text>
+                              </TouchableOpacity>
+
+                              <View style={styles.inspectRescheduleRow}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.inspectLabel}>RESCHEDULE</Text>
+                                  <TextInput
+                                    value={editScheduleDate}
+                                    onChangeText={setEditScheduleDate}
+                                    style={styles.inspectDateInput}
+                                    placeholder="YYYY-MM-DD"
+                                    placeholderTextColor={COLORS.gray700}
+                                  />
+                                </View>
+                                <TouchableOpacity style={styles.saveScheduleBtn} onPress={() => handleSaveSchedule(q)}>
+                                  <Text style={styles.saveNotesBtnText}>SHIFT</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.quietStatusText}>No pending solemn requirements mapped.</Text>
+                    )}
+                  </View>
+
+                  {/* 3. MISSED LIST */}
+                  <View style={styles.listSection}>
+                    <Text style={[styles.listSectionTitle, { color: COLORS.gothicCrimson }]}>Corrupted / Missed Covenants ({missedList.length})</Text>
+                    {missedList.length > 0 ? (
+                      missedList.map(q => (
+                        <View key={q.id} style={styles.modalQuestItem}>
+                          <View style={styles.modalQuestRow}>
+                            <TouchableOpacity onPress={() => onToggleQuest(q.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                              <ShieldAlert size={14} color={COLORS.gothicCrimson} />
+                              <Text style={styles.modalQuestTitleMissed} numberOfLines={1}>{q.title}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleToggleInspectQuest(q)} style={styles.inspectIcon}>
+                              <Eye size={12} color={COLORS.gray400} />
+                            </TouchableOpacity>
+                          </View>
+
+                          {activeInspectedQuestId === q.id && (
+                            <View style={styles.inspectPanel}>
+                              <Text style={styles.inspectLabel}>📜 LORE & NOTES</Text>
+                              <TextInput
+                                value={editNotesText}
+                                onChangeText={setEditNotesText}
+                                multiline
+                                style={styles.inspectNotesInput}
+                              />
+                              <TouchableOpacity style={styles.saveNotesBtn} onPress={() => handleSaveNotes(q)}>
+                                <Text style={styles.saveNotesBtnText}>Save Inscription</Text>
+                              </TouchableOpacity>
+
+                              <View style={styles.inspectRescheduleRow}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.inspectLabel}>RESCHEDULE</Text>
+                                  <TextInput
+                                    value={editScheduleDate}
+                                    onChangeText={setEditScheduleDate}
+                                    style={styles.inspectDateInput}
+                                    placeholder="YYYY-MM-DD"
+                                    placeholderTextColor={COLORS.gray700}
+                                  />
+                                </View>
+                                <TouchableOpacity style={styles.saveScheduleBtn} onPress={() => handleSaveSchedule(q)}>
+                                  <Text style={styles.saveNotesBtnText}>SHIFT</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={[styles.quietStatusText, { borderLeftColor: COLORS.gothicCrimson }]}>
+                        Clean record for today. Thy soul is free of broken bounds.
+                      </Text>
+                    )}
+                  </View>
+                </ScrollView>
+
+                {/* Modal Footer */}
+                <View style={styles.modalFooter}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      soundEngine.playClick();
+                      onSelectDate(dateStr);
+                      setActiveModalDate(null);
+                      if (onNavigateToTab) {
+                        onNavigateToTab('The Path');
+                      }
+                    }}
+                    style={styles.modalFooterInscribeBtn}
+                  >
+                    <Text style={styles.modalFooterInscribeBtnText}>Inscribe New Vow For Date</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => { soundEngine.playClick(); setActiveModalDate(null); }}
+                    style={styles.modalFooterCloseBtn}
+                  >
+                    <Text style={styles.modalFooterCloseBtnText}>Close Ledger</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
-        );
-      })()}
+          );
+        })()}
+      </Modal>
 
     </View>
   );
@@ -789,19 +792,22 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   weekdayLabel: {
-    flex: 1,
+    width: '13.5%',
+    marginHorizontal: '0.3%',
     textAlign: 'center',
     fontFamily: FONTS.mono,
-    fontSize: 8,
-    color: COLORS.gray500,
+    fontSize: 8.5,
+    color: COLORS.gray400,
   },
   monthCellsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
+    justifyContent: 'flex-start',
   },
   monthCell: {
-    width: '13.3%',
+    width: '13.5%',
+    marginHorizontal: '0.3%',
+    marginVertical: 3,
     minHeight: 52,
     borderRadius: 8,
     borderWidth: 1,

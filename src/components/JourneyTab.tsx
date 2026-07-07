@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { BookOpen, Skull } from 'lucide-react-native';
+import { BookOpen, Skull, Swords, Flame, Clock } from 'lucide-react-native';
 import { Quest } from '../types';
 import { ProceduralRuinBanner } from './ProceduralRuinBanner';
 import { GothicQuestItem } from './GothicQuestItem';
@@ -56,7 +56,7 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
   const completedTodayList = completedTodayQuests;
 
   return (
-    <ScrollView style={styles.viewport} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.viewport} contentContainerStyle={{ paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
       
       {/* 1. Daily Procedural Ancient Ruin Hero Banner */}
       <ProceduralRuinBanner 
@@ -83,7 +83,10 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
       <View style={styles.agendaCard}>
         <View style={styles.agendaHeader}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.agendaHeaderTitle}>⚔ TODAY'S SACRED AGENDA</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Swords size={13} color={COLORS.gothicGold} />
+              <Text style={styles.agendaHeaderTitle}>TODAY'S SACRED AGENDA</Text>
+            </View>
             <Text style={styles.agendaHeaderSubtitle}>
               Secure thy daily absolution, Ashen Knight. No future shadows are shown here.
             </Text>
@@ -98,7 +101,10 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
           {highPriority.length > 0 && (
             <View style={styles.prioritySection}>
               <View style={[styles.priorityHeaderRow, { borderBottomColor: 'rgba(164, 44, 56, 0.15)' }]}>
-                <Text style={[styles.priorityTitle, { color: COLORS.gothicCrimson }]}>💀 HIGH PRIORITY BOUNDS</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Skull size={11} color={COLORS.gothicCrimson} />
+                  <Text style={[styles.priorityTitle, { color: COLORS.gothicCrimson }]}>HIGH PRIORITY BOUNDS</Text>
+                </View>
                 <Text style={styles.priorityBadgeText}>{highPriority.length} Duty</Text>
               </View>
               <View style={styles.questItemsList}>
@@ -118,7 +124,10 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
           {mediumPriority.length > 0 && (
             <View style={styles.prioritySection}>
               <View style={[styles.priorityHeaderRow, { borderBottomColor: 'rgba(200, 158, 92, 0.15)' }]}>
-                <Text style={[styles.priorityTitle, { color: COLORS.gothicGold }]}>🔥 MEDIUM PRIORITY COVENANTS</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Flame size={11} color={COLORS.gothicGold} />
+                  <Text style={[styles.priorityTitle, { color: COLORS.gothicGold }]}>MEDIUM PRIORITY COVENANTS</Text>
+                </View>
                 <Text style={styles.priorityBadgeText}>{mediumPriority.length} Duty</Text>
               </View>
               <View style={styles.questItemsList}>
@@ -138,7 +147,10 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
           {optionalPriority.length > 0 && (
             <View style={styles.prioritySection}>
               <View style={[styles.priorityHeaderRow, { borderBottomColor: 'rgba(56, 189, 248, 0.15)' }]}>
-                <Text style={[styles.priorityTitle, { color: COLORS.gothicSky }]}>⏳ OPTIONAL & PERPETUAL DEVOTIONS</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Clock size={11} color={COLORS.gothicSky} />
+                  <Text style={[styles.priorityTitle, { color: COLORS.gothicSky }]}>OPTIONAL &amp; PERPETUAL DEVOTIONS</Text>
+                </View>
                 <Text style={styles.priorityBadgeText}>{optionalPriority.length} Duty</Text>
               </View>
               <View style={styles.questItemsList}>
@@ -187,6 +199,14 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
         </View>
       </View>
 
+      {/* Footer info */}
+      <View style={styles.footer}>
+        <Text style={styles.footerTitle}>† SORROWFUL BE THE HEART, PENITENT ASHEN KNIGHT †</Text>
+        <Text style={styles.footerText}>
+          ICARUS • STANDALONE MOBILE PROGRESSION ENGINE
+        </Text>
+      </View>
+
     </ScrollView>
   );
 };
@@ -194,7 +214,7 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
 const styles = StyleSheet.create({
   viewport: {
     flex: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
   },
   quoteCard: {
     padding: 16,
@@ -350,6 +370,27 @@ const styles = StyleSheet.create({
     lineHeight: 13,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  footer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(46, 50, 62, 0.2)',
+    marginTop: 20,
+    gap: 4,
+  },
+  footerTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 8.5,
+    color: '#8b8a85',
+    letterSpacing: 0.5,
+  },
+  footerText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray600,
+    letterSpacing: 1,
   }
 });
 export default JourneyTab;

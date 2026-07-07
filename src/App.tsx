@@ -24,7 +24,9 @@ import {
   User,
   ShieldAlert, 
   Sparkles, 
-  RefreshCw
+  RefreshCw,
+  Flame,
+  Leaf
 } from 'lucide-react-native';
 import { Quest, Goal, QuestDifficulty, QuestCategory, GOTHIC_QUOTES } from './types';
 import { Bonfire } from './components/Bonfire';
@@ -38,7 +40,7 @@ import { CampaignsTab } from './components/CampaignsTab';
 import { getCharacterProfile, saveCharacterProfile, rewardXp, addChronicleLog, purgePerfectGothicState, CharacterProfile, calculateActualStreak, calculateLongestStreak } from './utils/progressionUtils';
 import { getLocalDateString, getTodayLocalDateString } from './utils/dateUtils';
 import { calculateDayContext, getContextAwareQuote } from './utils/contextAwareEngine';
-import { DailyMonument } from './components/DailyMonument';
+
 import { IcarusAuthPortal } from './components/IcarusAuthPortal';
 import { deleteGoal, deleteQuest, deleteQuests, purgeUserData, saveGoals, saveQuests, saveUserProfile, signOutOfSupabase } from './lib/supabase';
 import { nativeStorage } from './utils/nativeStorage';
@@ -405,53 +407,30 @@ export default function App() {
 
   return (
     <View style={styles.rootContainer}>
-      
-      {/* Absolute Header Ambient Soundtrack Audio Controls */}
-      <View style={styles.absoluteHeaderControls}>
-        <TouchableOpacity
-          onPress={() => {
-            soundEngine.playClick();
-            setAudioEnabled(!audioEnabled);
-          }}
-          style={styles.controlPill}
-        >
-          {audioEnabled ? <Volume2 size={12} color={COLORS.gothicGold} /> : <VolumeX size={12} color={COLORS.gray500} />}
-          <Text style={[styles.controlPillText, audioEnabled && { color: COLORS.gothicGold }]}>AMBIENT</Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={handleLogout}
-          style={styles.controlPill}
-        >
-          <LogOut size={11} color={COLORS.gray400} />
-          <Text style={styles.controlPillText}>DEPART</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.mainScrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* ================= DAILY STATS MONUMENT BANNER ================= */}
-        <View style={styles.monumentWrapper}>
-          <DailyMonument 
-            date={new Date()}
-            activeCampaignsCou={activeCampaignsCount}
-            completedCampaignsCou={completedCampaignsCount}
-            skillsCount={unlockedSkillsCount}
-            titlesCount={titlesListCount}
-            level={Math.floor(characterProfile.xp / 1000) + 1}
-            streak={actualStreak}
-            season={dayContext.season}
-            specialOccasion={dayContext.specialOccasion}
-            hasFailedCampaign={hasFailedCampaign}
-            activeViewTab={activeViewTab}
-            activeViewLabel={
-              activeViewTab === 'The Path' ? `${activeCount} ACTIVE DUTIES` :
-              activeViewTab === 'The Ascent' ? `${activeCampaignsCount} ACTIVE CAMPAIGNS` :
-              activeViewTab === 'The Chronicle' ? `${filteredChronicle.length} RECORDS JOURNALED` :
-              activeViewTab === 'The Codex' ? `${unlockedSkillsCount} DISCIPINES REVEALED` :
-              `LEVEL ${Math.floor(characterProfile.xp / 1000) + 1} SOVEREIGN KNIGHT`
-            }
-          />
+      <View style={styles.mainContent}>
+        {/* ================= ELITE SLIM APP HEADER ================= */}
+        <View style={styles.slimHeader}>
+          <View>
+            <Text style={styles.slimHeaderTitle}>{activeViewTab.toUpperCase()}</Text>
+            <Text style={styles.slimHeaderLabel}>
+              {activeViewTab === 'The Path' ? `${activeCount} ACTIVE BOUNDS` :
+               activeViewTab === 'The Ascent' ? `${activeCampaignsCount} ACTIVE CAMPAIGNS` :
+               activeViewTab === 'The Chronicle' ? `${filteredChronicle.length} RECORDS JOURNALED` :
+               activeViewTab === 'The Codex' ? `${unlockedSkillsCount} ATTRIBUTES DECLARED` :
+               `LEVEL ${Math.floor(characterProfile.xp / 1000) + 1} SOVEREIGN KNIGHT`}
+            </Text>
+          </View>
+          <View style={styles.slimHeaderRight}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Flame size={11} color={COLORS.gothicCrimson} />
+              <Text style={styles.slimHeaderStreak}>{actualStreak} {actualStreak === 1 ? 'DAY' : 'DAYS'}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Leaf size={11} color={COLORS.gothicGoldDim} />
+              <Text style={styles.slimHeaderSeason}>{dayContext.season.toUpperCase()}</Text>
+            </View>
+          </View>
         </View>
 
         {/* ================= ACTIVE TAB PANEL VIEWPORT ================= */}
@@ -482,7 +461,7 @@ export default function App() {
           )}
 
           {activeViewTab === 'The Chronicle' && (
-            <View style={{ gap: 12 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12, paddingBottom: 110, paddingHorizontal: 0 }} showsVerticalScrollIndicator={false}>
               <GothicCalendar 
                 quests={quests}
                 onToggleQuest={handleCompleteQuest}
@@ -512,11 +491,11 @@ export default function App() {
                   </View>
                 </View>
 
-                <ScrollView style={styles.chronicleEntriesContainer} nestedScrollEnabled>
+                <ScrollView style={styles.chronicleEntriesContainer} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                   {filteredChronicle.length > 0 ? (
                     filteredChronicle.map((ch) => (
                       <View key={ch.id} style={styles.chronicleItem}>
-                        <Text style={styles.chronicleItemTime}>⚔ {ch.timeframe.toUpperCase()}</Text>
+                        <Text style={styles.chronicleItemTime}>{ch.timeframe.toUpperCase()}</Text>
                         <View style={styles.bulletsList}>
                           {ch.bullets.map((bullet, idx) => (
                             <View key={idx} style={styles.bulletRow}>
@@ -532,7 +511,15 @@ export default function App() {
                   )}
                 </ScrollView>
               </View>
-            </View>
+
+              {/* Footer info */}
+              <View style={styles.footer}>
+                <Text style={styles.footerTitle}>† SORROWFUL BE THE HEART, PENITENT ASHEN KNIGHT †</Text>
+                <Text style={styles.footerText}>
+                  ICARUS • STANDALONE MOBILE PROGRESSION ENGINE
+                </Text>
+              </View>
+            </ScrollView>
           )}
 
           {activeViewTab === 'The Codex' && (
@@ -567,18 +554,16 @@ export default function App() {
                 setShowResetConfirmModal(true);
               }}
               tab="The Wanderer"
+              audioEnabled={audioEnabled}
+              onToggleAudio={() => {
+                soundEngine.playClick();
+                setAudioEnabled(!audioEnabled);
+              }}
+              onLogout={handleLogout}
             />
           )}
         </View>
-
-        {/* Footer info */}
-        <View style={styles.footer}>
-          <Text style={styles.footerTitle}>† SORROWFUL BE THE HEART, PENITENT ASHEN KNIGHT †</Text>
-          <Text style={styles.footerText}>
-            ICARUS • STANDALONE MOBILE PROGRESSION ENGINE
-          </Text>
-        </View>
-      </ScrollView>
+      </View>
 
       {/* ================= RESTING BONFIRE COMMUNION SCREENSAVER ================= */}
       <Modal visible={isResting} animationType="fade" transparent>
@@ -727,6 +712,7 @@ const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
     backgroundColor: COLORS.gothicDark,
+    paddingTop: Platform.OS === 'ios' ? 47 : 12,
   },
   loadingContainer: {
     flex: 1,
@@ -741,45 +727,55 @@ const styles = StyleSheet.create({
     color: COLORS.gothicGold,
     letterSpacing: 1.5,
   },
-  absoluteHeaderControls: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingTop: Platform.OS === 'ios' ? 44 : 12,
-    paddingBottom: 8,
-    backgroundColor: COLORS.gothicDark,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(46, 50, 62, 0.2)',
-  },
-  controlPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.gothicCard,
-    borderColor: COLORS.gothicBorder,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
   controlPillText: {
     fontFamily: FONTS.mono,
     fontSize: 8.5,
     color: COLORS.gray400,
     fontWeight: 'bold',
   },
-  mainScrollView: {
+  mainContent: {
     flex: 1,
-  },
-  scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 110, // Avoid overlapping the sticky bottom navigation bar
+    paddingTop: 8,
   },
-  monumentWrapper: {
-    marginBottom: 16,
+  slimHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46, 50, 62, 0.25)',
+    paddingBottom: 10,
+    marginBottom: 12,
+  },
+  slimHeaderTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.gothicGold,
+    letterSpacing: 1.5,
+  },
+  slimHeaderLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gray400,
+    marginTop: 2,
+    textTransform: 'uppercase',
+  },
+  slimHeaderRight: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  slimHeaderStreak: {
+    fontFamily: FONTS.mono,
+    fontSize: 9.5,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  slimHeaderSeason: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicGoldDim,
+    letterSpacing: 0.5,
   },
   tabViewport: {
     flex: 1,

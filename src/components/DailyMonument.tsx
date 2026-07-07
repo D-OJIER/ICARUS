@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     padding: 2,
-    marginVertical: 10,
+    marginVertical: 4,
   },
   cornerIndicator: {
     width: 12,

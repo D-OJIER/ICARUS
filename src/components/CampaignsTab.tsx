@@ -9,7 +9,8 @@ import {
   StyleSheet, 
   Alert,
   Dimensions,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { 
   Sparkles, 
@@ -24,7 +25,9 @@ import {
   RefreshCw,
   Trophy,
   ArrowRight,
-  Lock
+  Lock,
+  Swords,
+  Tag
 } from 'lucide-react-native';
 import { Quest, Goal, QuestDifficulty, QuestCategory } from '../types';
 import { ProceduralEmblem } from './ProceduralEmblem';
@@ -149,14 +152,24 @@ export function CampaignsTab({
     };
   };
 
-  const getDaysRemaining = (goal: Goal) => {
-    const created = new Date(goal.createdAt);
-    const now = new Date();
-    const diffTime = now.getTime() - created.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    const totalDuration = 30;
-    const remaining = totalDuration - diffDays;
-    return Math.max(0, remaining);
+  const getDaysRemaining = (goal: Goal): number => {
+    // Try multiple strategies to parse createdAt
+    let createdMs = NaN;
+    if (goal.createdAt) {
+      createdMs = Date.parse(goal.createdAt);
+      // Fallback: numeric timestamp stored as string
+      if (isNaN(createdMs)) {
+        const asNum = Number(goal.createdAt);
+        if (!isNaN(asNum)) createdMs = asNum;
+      }
+    }
+    const totalDuration = Math.max(30, (goal.stages?.length ?? 4) * 7);
+    if (isNaN(createdMs)) {
+      // Can't determine start date — assume just started
+      return totalDuration;
+    }
+    const diffDays = Math.floor((Date.now() - createdMs) / (1000 * 60 * 60 * 24));
+    return Math.max(0, totalDuration - diffDays);
   };
 
   const generateDynamicAdvisorText = (goal: Goal) => {
@@ -329,11 +342,14 @@ export function CampaignsTab({
   });
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>🛡️ Campaigns</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Shield size={14} color={COLORS.gothicGold} />
+                <Text style={styles.headerTitle}>CAMPAIGNS</Text>
+              </View>
         <Text style={styles.headerSubtitle}>Sovereign Ledger of thy Growth & One-Time Devotions</Text>
       </View>
 
@@ -349,7 +365,10 @@ export function CampaignsTab({
             style={[styles.tabButton, miniTab === 'active' && styles.tabActive]}
           >
             <Text style={[styles.tabText, miniTab === 'active' ? styles.tabTextActive : { color: COLORS.gray500 }]}>
-              🛡️ ACTIVE CAMPAIGNS
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Shield size={11} color={COLORS.gothicGold} />
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, fontWeight: 'bold', color: COLORS.gothicGold }}>ACTIVE CAMPAIGNS</Text>
+              </View>
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -391,7 +410,10 @@ export function CampaignsTab({
                     <ProceduralEmblem name={goal.title} id={goal.id} createdAt={goal.createdAt} difficulty="Sinuous Vow" size={26} />
                     <View style={styles.goalCardHeaderText}>
                       <Text style={styles.goalCardTitle} numberOfLines={1}>{goal.title}</Text>
-                      <Text style={styles.goalCardCategory}>⚔️ {goal.categoryName}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                        <Tag size={10} color={COLORS.gothicGold} />
+                        <Text style={styles.goalCardCategory}>{goal.categoryName}</Text>
+                      </View>
                     </View>
                   </View>
 
@@ -460,7 +482,10 @@ export function CampaignsTab({
 
           {/* Quick Tasks List */}
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>🛡️ Pure Active Tasks List ({quickTasksPool.length})</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Swords size={13} color={COLORS.gothicGold} />
+              <Text style={styles.sectionTitle}>Active Tasks List ({quickTasksPool.length})</Text>
+            </View>
             <View style={styles.quickTasksList}>
               {quickTasksPool.length === 0 ? (
                 <Text style={styles.noTasksText}>No active quick tasks inside ledger.</Text>
@@ -547,265 +572,287 @@ export function CampaignsTab({
       )}
 
       {/* DETAIL MODAL OVERLAY */}
-      {isDetailModalOpen && activeCampaign && (
+      <Modal visible={isDetailModalOpen && !!activeCampaign} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalContent} contentContainerStyle={{ paddingBottom: 64 }} showsVerticalScrollIndicator={false}>
+          <View style={styles.modalCard}>
+            <View style={[styles.modalCorner, { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 }]} />
+            <View style={[styles.modalCorner, { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 }]} />
+            <View style={[styles.modalCorner, { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 }]} />
+            <View style={[styles.modalCorner, { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 }]} />
             
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <ProceduralEmblem name={activeCampaign.title} id={activeCampaign.id} createdAt={activeCampaign.createdAt} difficulty="Mortal Penance" size={30} />
-                <View>
-                  <Text style={styles.modalHeaderCategory}>ACTIVE CAMPAIGN TITLE</Text>
-                  <Text style={styles.modalHeaderTitle} numberOfLines={1}>{activeCampaign.title}</Text>
-                </View>
-              </View>
+            {activeCampaign && (
+              <ScrollView style={styles.modalContent} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+                
+                {/* Modal Header */}
+                <View style={styles.modalHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <ProceduralEmblem name={activeCampaign.title} id={activeCampaign.id} createdAt={activeCampaign.createdAt} difficulty="Mortal Penance" size={30} />
+                    <View>
+                      <Text style={styles.modalHeaderCategory}>ACTIVE CAMPAIGN TITLE</Text>
+                      <Text style={styles.modalHeaderTitle} numberOfLines={1}>{activeCampaign.title}</Text>
+                    </View>
+                  </View>
 
-              <TouchableOpacity 
-                style={styles.modalCloseBtn}
-                onPress={() => { soundEngine.playClick(); setIsDetailModalOpen(false); }}
-              >
-                <Text style={styles.modalCloseBtnText}>† CLOSE LEDGER</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Campaign Status Box */}
-            <View style={styles.statusBox}>
-              <View>
-                <Text style={styles.statusBoxSubText}>Campaign Status</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <Shield size={12} color={COLORS.gothicGold} />
-                  <Text style={styles.statusBoxText}>
-                    {activeCampaign.status === 'In Quest' ? 'In Quest (Active)' : activeCampaign.status}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusBadgeText}>★ Focus Active</Text>
-              </View>
-            </View>
-
-            {/* HUD Panel Metrics */}
-            <View style={styles.hudPanel}>
-              <View style={styles.hudPanelCol}>
-                <Text style={styles.hudLabel}>COMPLETION %</Text>
-                <Text style={styles.hudValue}>{calculateCampaignProgress(activeCampaign).percentage}% Complete</Text>
-                <View style={[styles.hudProgressBarBg, { marginTop: 4 }]}>
-                  <View style={[styles.hudProgressBarFill, { width: `${calculateCampaignProgress(activeCampaign).percentage}%` }]} />
-                </View>
-              </View>
-              <View style={[styles.hudPanelCol, styles.hudBorderCol]}>
-                <Text style={styles.hudLabel}>DAYS REMAINING</Text>
-                <Text style={styles.hudValue}>📅 {getDaysRemaining(activeCampaign)} Days Left</Text>
-                <Text style={styles.hudSubLabel}>30-DAY TEMPLE PERIOD</Text>
-              </View>
-              <View style={[styles.hudPanelCol, styles.hudBorderCol]}>
-                <Text style={styles.hudLabel}>CURRENT PHASE</Text>
-                <Text style={[styles.hudValue, { color: COLORS.gothicGold }]} numberOfLines={1}>
-                  🛡️ {getPhaseAndWeek(activeCampaign).phaseName}
-                </Text>
-                <Text style={styles.hudSubLabel}>ACTIVE FOCUS TIER</Text>
-              </View>
-            </View>
-
-            {/* Milestones / Stage Selector */}
-            <View style={styles.milestoneSection}>
-              <View style={styles.milestoneHeader}>
-                <BookOpen size={14} color={COLORS.gothicGold} />
-                <Text style={styles.milestoneHeaderTitle}>Campaign Progress Roadmap</Text>
-              </View>
-
-              <View style={styles.stageGrid}>
-                {activeCampaign.stages.map((stage, idx) => {
-                  const activePhaseInfo = getPhaseAndWeek(activeCampaign);
-                  const activeStageIndex = activePhaseInfo.index;
-                  const isCurrent = activeStageIndex === idx;
-                  const hasCompletedAll = stage.tasks?.every(task => 
-                    quests.some(q => q.title.toLowerCase().includes(task.title.toLowerCase()) && q.completed)
-                  );
-                  const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
-                  const isSelectedForPreview = currentViewStageIndex === idx;
-
-                  return (
-                    <TouchableOpacity
-                      key={idx}
-                      onPress={() => {
-                        soundEngine.playClick();
-                        setPreviewStageIndex(idx);
-                      }}
-                      style={[
-                        styles.stageGridBtn,
-                        isSelectedForPreview && { borderColor: COLORS.gothicGold, backgroundColor: 'rgba(200, 158, 92, 0.2)' },
-                        isCurrent && !isSelectedForPreview && { borderColor: 'rgba(200, 158, 92, 0.4)', backgroundColor: 'rgba(200, 158, 92, 0.05)' },
-                        hasCompletedAll && !isCurrent && !isSelectedForPreview && { borderColor: 'rgba(16, 185, 129, 0.2)', backgroundColor: 'rgba(16, 185, 129, 0.05)' }
-                      ]}
-                    >
-                      <Text style={[styles.stageGridName, isSelectedForPreview && { color: COLORS.gothicGold }]} numberOfLines={1}>
-                        {stage.name.replace('Phase ', 'Ph. ')}
-                      </Text>
-                      <Text style={[styles.stageGridStatus, hasCompletedAll ? { color: '#10b981' } : isCurrent ? { color: COLORS.gothicGold } : { color: COLORS.gray600 }]}>
-                        {hasCompletedAll ? '✔ SECURED' : isCurrent ? '★ FOCUS' : '🔒 LOCK'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Uncarved Blueprint Alert */}
-            {!activeCampaign.linkedQuestsAdded && (
-              <View style={styles.blueprintAlertCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.blueprintAlertTitle}>Uncarved Campaign Blueprint</Text>
-                  <Text style={styles.blueprintAlertSubtitle}>Tasks have not been carved onto thy calendar. Click to distribute evenly.</Text>
-                </View>
-                <View style={styles.blueprintAlertActions}>
-                  <TextInput
-                    value={startDateStr}
-                    onChangeText={setStartDateStr}
-                    style={styles.startDateInput}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={COLORS.gray700}
-                  />
-                  <TouchableOpacity style={styles.carveBtn} onPress={() => handleCarveToCalendar(activeCampaign)}>
-                    <Text style={styles.carveBtnText}>Carve To Calendar</Text>
+                  <TouchableOpacity 
+                    style={styles.modalCloseBtn}
+                    onPress={() => { soundEngine.playClick(); setIsDetailModalOpen(false); }}
+                  >
+                    <Text style={styles.modalCloseBtnText}>† CLOSE LEDGER</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
-            )}
 
-            {/* Current Objectives List */}
-            <View style={styles.objectivesSection}>
-              <Text style={styles.objectivesHeaderTitle}>
-                {(() => {
-                  const activePhaseInfo = getPhaseAndWeek(activeCampaign);
-                  const activeStageIndex = activePhaseInfo.index;
-                  const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
-                  if (currentViewStageIndex === activeStageIndex) return '🕯️ Current Objectives';
-                  if (currentViewStageIndex > activeStageIndex) return '🔒 Previewing Locked Stage';
-                  return '✔ Previewing Completed Stage';
-                })()}
-              </Text>
+                {/* Campaign Status Box */}
+                <View style={styles.statusBox}>
+                  <View>
+                    <Text style={styles.statusBoxSubText}>Campaign Status</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      <Shield size={12} color={COLORS.gothicGold} />
+                      <Text style={styles.statusBoxText}>
+                        {activeCampaign.status === 'In Quest' ? 'In Quest (Active)' : activeCampaign.status}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.statusBadge}>
+                    <Text style={styles.statusBadgeText}>★ Focus Active</Text>
+                  </View>
+                </View>
 
-              <View style={{ gap: 8 }}>
-                {(() => {
-                  const activePhaseInfo = getPhaseAndWeek(activeCampaign);
-                  const activeStageIndex = activePhaseInfo.index;
-                  const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
-                  const currentViewStage = activeCampaign.stages[currentViewStageIndex];
-                  const isStageLocked = currentViewStageIndex > activeStageIndex;
+                {/* HUD Panel Metrics */}
+                <View style={styles.hudPanel}>
+                  <View style={styles.hudPanelCol}>
+                    <Text style={styles.hudLabel}>COMPLETION %</Text>
+                    <Text style={styles.hudValue}>{calculateCampaignProgress(activeCampaign).percentage}% Complete</Text>
+                    <View style={[styles.hudProgressBarBg, { marginTop: 4 }]}>
+                      <View style={[styles.hudProgressBarFill, { width: `${calculateCampaignProgress(activeCampaign).percentage}%` }]} />
+                    </View>
+                  </View>
+                  <View style={[styles.hudPanelCol, styles.hudBorderCol]}>
+                    <Text style={styles.hudLabel}>DAYS REMAINING</Text>
+                    <Text style={styles.hudValue}>{getDaysRemaining(activeCampaign)} Days Left</Text>
+                    <Text style={styles.hudSubLabel}>
+                      {Math.max(30, (activeCampaign.stages?.length ?? 4) * 7)}-DAY TEMPLE PERIOD
+                    </Text>
+                  </View>
+                  <View style={[styles.hudPanelCol, styles.hudBorderCol]}>
+                    <Text style={styles.hudLabel}>CURRENT PHASE</Text>
+                    <Text style={[styles.hudValue, { color: COLORS.gothicGold }]} numberOfLines={1}>
+                      🛡️ {getPhaseAndWeek(activeCampaign).phaseName}
+                    </Text>
+                    <Text style={styles.hudSubLabel}>ACTIVE FOCUS TIER</Text>
+                  </View>
+                </View>
 
-                  return currentViewStage?.tasks?.map((task) => {
-                    const matchingQuest = quests.find(q => 
-                      q.title.toLowerCase().includes(task.title.toLowerCase())
-                    );
-                    const isCompleted = !!(matchingQuest && matchingQuest.completed);
-                    const isExpanded = !!expandedTaskIds[task.id];
+                {/* Milestones / Stage Selector */}
+                <View style={styles.milestoneSection}>
+                  <View style={styles.milestoneHeader}>
+                    <BookOpen size={14} color={COLORS.gothicGold} />
+                    <Text style={styles.milestoneHeaderTitle}>Campaign Progress Roadmap</Text>
+                  </View>
 
-                    return (
-                      <TouchableOpacity
-                        key={task.id}
-                        activeOpacity={0.9}
-                        onPress={() => {
-                          soundEngine.playClick();
-                          setExpandedTaskIds(prev => ({ ...prev, [task.id]: !prev[task.id] }));
-                        }}
-                        style={[styles.objectiveCard, isExpanded && { borderColor: COLORS.gothicGold, backgroundColor: COLORS.gothicCard }]}
-                      >
-                        <View style={styles.objectiveHeaderRow}>
-                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <ChevronRight size={12} color={COLORS.gothicGold} style={isExpanded && { transform: [{ rotate: '90deg' }] }} />
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.objectiveTitle, isCompleted && { textDecorationLine: 'line-through', color: COLORS.gray600 }]} numberOfLines={1}>
-                                {task.title}
-                              </Text>
-                            </View>
-                          </View>
-                          
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.objectiveDiffBadge}>{task.difficulty.toUpperCase()}</Text>
-                            {isStageLocked ? (
-                              <View style={styles.lockBadge}>
-                                <Lock size={8} color={COLORS.gray600} />
-                              </View>
-                            ) : (
-                              <TouchableOpacity
-                                onPress={() => handleToggleTaskCheckbox(activeCampaign, task.title)}
-                                style={[styles.objectiveCheckbox, isCompleted && { borderColor: COLORS.gothicGold, backgroundColor: 'rgba(200, 158, 92, 0.2)' }]}
-                              >
-                                {isCompleted && <Check size={10} color={COLORS.gothicGold} />}
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        </View>
+                  <View style={styles.stageGrid}>
+                    {activeCampaign.stages.map((stage, idx) => {
+                      const activePhaseInfo = getPhaseAndWeek(activeCampaign);
+                      const activeStageIndex = activePhaseInfo.index;
+                      const isCurrent = activeStageIndex === idx;
+                      const hasCompletedAll = stage.tasks?.every(task => 
+                        quests.some(q => q.title.toLowerCase().includes(task.title.toLowerCase()) && q.completed)
+                      );
+                      const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
+                      const isSelectedForPreview = currentViewStageIndex === idx;
 
-                        {isExpanded && (
-                          <View style={styles.objectiveExpanded}>
-                            <Text style={styles.expandedLabel}>DETAILS:</Text>
-                            <Text style={styles.expandedDesc}>
-                              {task.description || "No ancient scriptures recorded for this objective."}
-                            </Text>
-                            <View style={styles.expandedFooter}>
-                              <Text style={styles.xpText}>
-                                ★ XP value: {task.difficulty === 'Sinuous Vow' ? 150 : task.difficulty === 'Mortal Penance' ? 300 : 75} XP
-                              </Text>
-                              {!isStageLocked && (
-                                <TouchableOpacity 
-                                  style={styles.cleanseBtn}
-                                  onPress={() => handleToggleTaskCheckbox(activeCampaign, task.title)}
-                                >
-                                  <Text style={styles.cleanseBtnText}>
-                                    {isCompleted ? '† MARK UNFINISHED' : '† CLEANSE & COMPLETE'}
-                                  </Text>
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          </View>
-                        )}
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          onPress={() => {
+                            soundEngine.playClick();
+                            setPreviewStageIndex(idx);
+                          }}
+                          style={[
+                            styles.stageGridBtn,
+                            isSelectedForPreview && { borderColor: COLORS.gothicGold, backgroundColor: 'rgba(200, 158, 92, 0.2)' },
+                            isCurrent && !isSelectedForPreview && { borderColor: 'rgba(200, 158, 92, 0.4)', backgroundColor: 'rgba(200, 158, 92, 0.05)' },
+                            hasCompletedAll && !isCurrent && !isSelectedForPreview && { borderColor: 'rgba(16, 185, 129, 0.2)', backgroundColor: 'rgba(16, 185, 129, 0.05)' }
+                          ]}
+                        >
+                          <Text style={[styles.stageGridName, isSelectedForPreview && { color: COLORS.gothicGold }]} numberOfLines={1}>
+                            {stage.name.replace('Phase ', 'Ph. ')}
+                          </Text>
+                          <Text style={[styles.stageGridStatus, hasCompletedAll ? { color: '#10b981' } : isCurrent ? { color: COLORS.gothicGold } : { color: COLORS.gray600 }]}>
+                            {hasCompletedAll ? '✔ SECURED' : isCurrent ? '★ FOCUS' : '🔒 LOCK'}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Uncarved Blueprint Alert */}
+                {!activeCampaign.linkedQuestsAdded && (
+                  <View style={styles.blueprintAlertCard}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.blueprintAlertTitle}>Uncarved Campaign Blueprint</Text>
+                      <Text style={styles.blueprintAlertSubtitle}>Tasks have not been carved onto thy calendar. Click to distribute evenly.</Text>
+                    </View>
+                    <View style={styles.blueprintAlertActions}>
+                      <TextInput
+                        value={startDateStr}
+                        onChangeText={setStartDateStr}
+                        style={styles.startDateInput}
+                        placeholder="YYYY-MM-DD"
+                        placeholderTextColor={COLORS.gray700}
+                      />
+                      <TouchableOpacity style={styles.carveBtn} onPress={() => handleCarveToCalendar(activeCampaign)}>
+                        <Text style={styles.carveBtnText}>Carve To Calendar</Text>
                       </TouchableOpacity>
-                    );
-                  });
-                })()}
-              </View>
-            </View>
+                    </View>
+                  </View>
+                )}
 
-            {/* AI Advisor Assessment */}
-            <View style={styles.advisorCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <Sparkles size={12} color={COLORS.gothicGold} />
-                <Text style={styles.advisorHeaderTitle}>Strategist AI Assessment</Text>
-              </View>
-              <Text style={styles.advisorText}>
-                {generateDynamicAdvisorText(activeCampaign)}
-              </Text>
-            </View>
+                {/* Current Objectives List */}
+                <View style={styles.objectivesSection}>
+                  <Text style={styles.objectivesHeaderTitle}>
+                    {(() => {
+                      const activePhaseInfo = getPhaseAndWeek(activeCampaign);
+                      const activeStageIndex = activePhaseInfo.index;
+                      const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
+                      if (currentViewStageIndex === activeStageIndex) return '🕯️ Current Objectives';
+                      if (currentViewStageIndex > activeStageIndex) return '🔒 Previewing Locked Stage';
+                      return '✔ Previewing Completed Stage';
+                    })()}
+                  </Text>
 
-            {/* Unlocks Panel */}
-            <View style={styles.unlocksRow}>
-              <View style={styles.unlocksBadge}>
-                <Text style={styles.unlocksSubLabel}>MASTERY CATALYSTS</Text>
-                <Text style={styles.unlocksLabel}>⚔️ Attribute Masteries</Text>
-              </View>
-              <View style={styles.unlocksBadge}>
-                <Text style={styles.unlocksSubLabel}>EVOLUTION INFLUENCE</Text>
-                <Text style={[styles.unlocksLabel, { color: COLORS.gothicSky }]}>💎 Level-Up XP Boost</Text>
-              </View>
-            </View>
+                  <View style={{ gap: 8 }}>
+                    {(() => {
+                      const activePhaseInfo = getPhaseAndWeek(activeCampaign);
+                      const activeStageIndex = activePhaseInfo.index;
+                      const currentViewStageIndex = previewStageIndex !== null ? previewStageIndex : activeStageIndex;
+                      const currentViewStage = activeCampaign.stages[currentViewStageIndex];
+                      const isStageLocked = currentViewStageIndex > activeStageIndex;
 
-            {/* Abandon Campaign Button */}
-            <View style={styles.abandonWrapper}>
-              <TouchableOpacity 
-                style={styles.abandonBtn}
-                onPress={() => handleAbandonCampaignClick(activeCampaign)}
-              >
-                <Trash2 size={12} color={COLORS.gothicCrimson} />
-                <Text style={styles.abandonBtnText}>ABANDON CRUSADE CAMPAIGN</Text>
-              </TouchableOpacity>
-            </View>
+                      return currentViewStage?.tasks?.map((task) => {
+                        const matchingQuest = quests.find(q => 
+                          q.title.toLowerCase().includes(task.title.toLowerCase())
+                        );
+                        const isCompleted = !!(matchingQuest && matchingQuest.completed);
+                        const isExpanded = !!expandedTaskIds[task.id];
 
-          </ScrollView>
+                        return (
+                          <TouchableOpacity
+                            key={task.id}
+                            activeOpacity={0.9}
+                            onPress={() => {
+                              soundEngine.playClick();
+                              setExpandedTaskIds(prev => ({ ...prev, [task.id]: !prev[task.id] }));
+                            }}
+                            style={[styles.objectiveCard, isExpanded && { borderColor: COLORS.gothicGold, backgroundColor: COLORS.gothicCard }]}
+                          >
+                            <View style={styles.objectiveHeaderRow}>
+                              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <ChevronRight size={12} color={COLORS.gothicGold} style={isExpanded && { transform: [{ rotate: '90deg' }] }} />
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.objectiveTitle, isCompleted && { textDecorationLine: 'line-through', color: COLORS.gray600 }]} numberOfLines={1}>
+                                    {task.title}
+                                  </Text>
+                                </View>
+                              </View>
+                              
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={styles.objectiveDiffBadge}>{task.difficulty.toUpperCase()}</Text>
+                                {isStageLocked ? (
+                                  <View style={styles.lockBadge}>
+                                    <Lock size={8} color={COLORS.gray600} />
+                                  </View>
+                                ) : (
+                                  <TouchableOpacity
+                                    onPress={() => handleToggleTaskCheckbox(activeCampaign, task.title)}
+                                    style={[styles.objectiveCheckbox, isCompleted && { borderColor: COLORS.gothicGold, backgroundColor: 'rgba(200, 158, 92, 0.2)' }]}
+                                  >
+                                    {isCompleted && <Check size={10} color={COLORS.gothicGold} />}
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            </View>
+
+                            {isExpanded && (
+                              <View style={styles.objectiveExpanded}>
+                                <Text style={styles.expandedLabel}>DETAILS:</Text>
+                                <Text style={styles.expandedDesc}>
+                                  {task.description || "No ancient scriptures recorded for this objective."}
+                                </Text>
+                                <View style={styles.expandedFooter}>
+                                  <Text style={styles.xpText}>
+                                    ★ XP value: {task.difficulty === 'Sinuous Vow' ? 150 : task.difficulty === 'Mortal Penance' ? 300 : 75} XP
+                                  </Text>
+                                  {!isStageLocked && (
+                                    <TouchableOpacity 
+                                      style={styles.cleanseBtn}
+                                      onPress={() => handleToggleTaskCheckbox(activeCampaign, task.title)}
+                                    >
+                                      <Text style={styles.cleanseBtnText}>
+                                        {isCompleted ? '† MARK UNFINISHED' : '† CLEANSE & COMPLETE'}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  )}
+                                </View>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      });
+                    })()}
+                  </View>
+                </View>
+
+                {/* AI Advisor Assessment */}
+                <View style={styles.advisorCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Sparkles size={12} color={COLORS.gothicGold} />
+                    <Text style={styles.advisorHeaderTitle}>Strategist AI Assessment</Text>
+                  </View>
+                  <Text style={styles.advisorText}>
+                    {generateDynamicAdvisorText(activeCampaign)}
+                  </Text>
+                </View>
+
+                {/* Unlocks Panel */}
+                <View style={styles.unlocksRow}>
+                  <View style={styles.unlocksBadge}>
+                    <Text style={styles.unlocksSubLabel}>MASTERY CATALYSTS</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Trophy size={11} color={COLORS.gothicGold} />
+                        <Text style={styles.unlocksLabel}>Attribute Masteries</Text>
+                      </View>
+                  </View>
+                  <View style={styles.unlocksBadge}>
+                    <Text style={styles.unlocksSubLabel}>EVOLUTION INFLUENCE</Text>
+                    <Text style={[styles.unlocksLabel, { color: COLORS.gothicSky }]}>💎 Level-Up XP Boost</Text>
+                  </View>
+                </View>
+
+                {/* Abandon Campaign Button */}
+                <View style={styles.abandonWrapper}>
+                  <TouchableOpacity 
+                    style={styles.abandonBtn}
+                    onPress={() => handleAbandonCampaignClick(activeCampaign)}
+                  >
+                    <Trash2 size={12} color={COLORS.gothicCrimson} />
+                    <Text style={styles.abandonBtnText}>ABANDON CRUSADE CAMPAIGN</Text>
+                  </TouchableOpacity>
+                </View>
+
+              </ScrollView>
+            )}
+          </View>
         </View>
-      )}
+      </Modal>
+
+      {/* Footer info */}
+      <View style={styles.footer}>
+        <Text style={styles.footerTitle}>† SORROWFUL BE THE HEART, PENITENT ASHEN KNIGHT †</Text>
+        <Text style={styles.footerText}>
+          ICARUS • STANDALONE MOBILE PROGRESSION ENGINE
+        </Text>
+      </View>
 
     </ScrollView>
   );
@@ -814,7 +861,7 @@ export function CampaignsTab({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
   },
   header: {
     marginVertical: 12,
@@ -1121,12 +1168,33 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10, 11, 13, 0.96)',
+    backgroundColor: 'rgba(10, 11, 13, 0.85)',
     zIndex: 1000,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 550,
+    height: '85%',
+    backgroundColor: COLORS.gothicCard,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 158, 92, 0.3)',
+    borderRadius: 16,
+    padding: 16,
+    position: 'relative',
+    overflow: 'hidden',
   },
   modalContent: {
     flex: 1,
-    padding: 16,
+  },
+  modalCorner: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderColor: COLORS.gothicGold,
+    opacity: 0.45,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1136,7 +1204,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(46, 50, 62, 0.3)',
     paddingBottom: 12,
     marginBottom: 16,
-    marginTop: Platform.OS === 'ios' ? 24 : 8,
+    marginTop: 0,
   },
   modalHeaderCategory: {
     fontFamily: FONTS.mono,
@@ -1525,5 +1593,26 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: COLORS.gothicCrimson,
     fontWeight: 'bold',
+  },
+  footer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(46, 50, 62, 0.2)',
+    marginTop: 20,
+    gap: 4,
+  },
+  footerTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 8.5,
+    color: '#8b8a85',
+    letterSpacing: 0.5,
+  },
+  footerText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray600,
+    letterSpacing: 1,
   }
 });

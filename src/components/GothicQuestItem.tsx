@@ -10,7 +10,7 @@ import {
   Platform, 
   UIManager 
 } from 'react-native';
-import { ShieldAlert, Trash2, CheckCircle2, Circle, ChevronDown } from 'lucide-react-native';
+import { ShieldAlert, Trash2, CheckCircle2, Circle, ChevronDown, Clock, CalendarDays } from 'lucide-react-native';
 import { Quest } from '../types';
 import { soundEngine } from '../utils/audio';
 import { COLORS, FONTS } from '../theme';
@@ -249,7 +249,8 @@ export const GothicQuestItem: React.FC<GothicQuestItemProps> = ({
 
             {daysLeft !== null && daysLeft <= 2 && !quest.completed && (
               <View style={styles.fadesBadge}>
-                <Text style={styles.fadesText}>⏳ {daysLeft === 0 ? 'FADES TONIGHT' : `${daysLeft} days left`}</Text>
+                <Clock size={9} color={COLORS.gothicGold} />
+                <Text style={styles.fadesText}>{daysLeft === 0 ? 'FADES TONIGHT' : `${daysLeft} days left`}</Text>
               </View>
             )}
           </View>
@@ -285,7 +286,10 @@ export const GothicQuestItem: React.FC<GothicQuestItemProps> = ({
 
               {quest.dueDate && !quest.completed ? (
                 <View style={styles.dueDateRow}>
-                  <Text style={styles.dueDateHeader}>📅 JUDGMENT DUE:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <CalendarDays size={10} color={COLORS.gray400} />
+                    <Text style={styles.dueDateHeader}>JUDGMENT DUE:</Text>
+                  </View>
                   <Text style={styles.dueDateText}>
                     {new Date(quest.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                   </Text>
@@ -409,6 +413,9 @@ const styles = StyleSheet.create({
     color: COLORS.gothicCrimson,
   },
   fadesBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     backgroundColor: 'rgba(200, 158, 92, 0.1)',
     borderColor: 'rgba(200, 158, 92, 0.2)',
     borderWidth: 1,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -8,7 +8,10 @@ import {
   StyleSheet, 
   Dimensions, 
   ActivityIndicator,
-  Alert
+  Alert,
+  Animated,
+  Easing,
+  Modal
 } from 'react-native';
 import { 
   User, 
@@ -28,8 +31,13 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  Shield,
+  Swords,
+  Coins,
+  Users
 } from 'lucide-react-native';
+import Svg, { Circle, Line, Text as SvgText, G, Path, Polygon, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { 
   CharacterProfile, 
   calculateLevelInfo, 
@@ -45,6 +53,8 @@ import { ProceduralAvatar } from './ProceduralAvatar';
 import { generateProfileAssessment, getApiKey } from '../utils/aiEngine';
 import { COLORS, FONTS } from '../theme';
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
 interface GothicProfileProps {
   quests: Quest[];
   goals: Goal[];
@@ -54,6 +64,9 @@ interface GothicProfileProps {
   onUpdateProfile: (updated: CharacterProfile) => void;
   onReset?: () => void;
   tab: 'The Codex' | 'The Wanderer';
+  audioEnabled?: boolean;
+  onToggleAudio?: () => void;
+  onLogout?: () => void;
 }
 
 export const GothicProfile: React.FC<GothicProfileProps> = ({
@@ -64,7 +77,10 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
   profile,
   onUpdateProfile,
   onReset,
-  tab
+  tab,
+  audioEnabled,
+  onToggleAudio,
+  onLogout,
 }) => {
   const [activeSkillTab, setActiveSkillTab] = useState<'growing' | 'mastered'>('growing');
   const [skillSearch, setSkillSearch] = useState('');
@@ -74,6 +90,112 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
 
   const [isAssessing, setIsAssessing] = useState(false);
   const [assessmentResult, setAssessmentResult] = useState<string | null>(null);
+
+  const [activeSphere, setActiveSphere] = useState<'VIGOR' | 'RESOLVE' | 'COGNITION' | 'CHARISMA'>('RESOLVE');
+
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.25,
+          duration: 2500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1.0,
+          duration: 2500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+  }, [pulseAnim]);
+
+  const vigorAvg = Math.round(((profile.stats?.strength || 10) + (profile.stats?.endurance || 10) + (profile.stats?.recovery || 10) + (profile.stats?.resilience || 10)) / 4);
+  const resolveAvg = Math.round(((profile.stats?.discipline || 10) + (profile.stats?.consistency || 10) + (profile.stats?.focus || 10) + (profile.stats?.leadership || 10)) / 4);
+  const cognitionAvg = Math.round(((profile.stats?.programming || 10) + (profile.stats?.mathematics || 10) + (profile.stats?.learningSpeed || 10) + (profile.stats?.creativity || 10)) / 4);
+  const charismaAvg = Math.round(((profile.stats?.finance || 10) + (profile.stats?.communication || 10) + (profile.stats?.networking || 10) + (profile.stats?.collaboration || 10)) / 4);
+
+  const getActiveSphereData = () => {
+    switch (activeSphere) {
+      case 'VIGOR':
+        return {
+          title: 'VIGOR SPHERE',
+          average: vigorAvg,
+          description: 'FORTITUDE OF THE PHYSICAL VESSEL. GOVERNS STRENGTH, ENDURANCE, VITAL RECOVERY, AND SPATIAL RESILIENCE.',
+          color: COLORS.gothicCrimson,
+          subStats: [
+            { label: 'STRENGTH', val: profile.stats?.strength || 10, color: COLORS.gothicCrimson },
+            { label: 'ENDURANCE', val: profile.stats?.endurance || 10, color: COLORS.gothicCrimson },
+            { label: 'RECOVERY', val: profile.stats?.recovery || 10, color: COLORS.gothicCrimson },
+            { label: 'RESILIENCE', val: profile.stats?.resilience || 10, color: COLORS.gothicCrimson },
+          ],
+          skillKeywords: ['run', 'strength', 'mobility', 'nutrition', 'fit', 'gym', 'workout', 'lift']
+        };
+      case 'COGNITION':
+        return {
+          title: 'COGNITION SPHERE',
+          average: cognitionAvg,
+          description: 'POWER OF THE MENTAL ARCHITECTURE. GOVERNS SOFTWARE SYSTEMS ENGINEERING, NUMERICAL EQUATIONS, READING OF LORE, AND CREATIVE GROWTH.',
+          color: COLORS.gothicSky,
+          subStats: [
+            { label: 'PROGRAMMING', val: profile.stats?.programming || 10, color: COLORS.gothicSky },
+            { label: 'MATHEMATICS', val: profile.stats?.mathematics || 10, color: COLORS.gothicSky },
+            { label: 'LEARNING SPEED', val: profile.stats?.learningSpeed || 10, color: COLORS.gothicSky },
+            { label: 'CREATIVITY', val: profile.stats?.creativity || 10, color: COLORS.gothicSky },
+          ],
+          skillKeywords: ['prog', 'fund', 'java', 'oop', 'spring', 'front', 'react', 'next', 'ai', 'read']
+        };
+      case 'CHARISMA':
+        return {
+          title: 'CHARISMA SPHERE',
+          average: charismaAvg,
+          description: 'GRACE OF SOCIAL COMMUNION. GOVERNS FINANCIAL STRUCTURES, NETWORK EXPANSION, COLLABORATIVE DEEDS, AND SPEECH.',
+          color: '#10b981',
+          subStats: [
+            { label: 'FINANCE', val: profile.stats?.finance || 10, color: '#10b981' },
+            { label: 'COMMUNICATION', val: profile.stats?.communication || 10, color: '#10b981' },
+            { label: 'NETWORKING', val: profile.stats?.networking || 10, color: '#10b981' },
+            { label: 'COLLABORATION', val: profile.stats?.collaboration || 10, color: '#10b981' },
+          ],
+          skillKeywords: ['finance', 'communication', 'networking', 'collaboration', 'lead']
+        };
+      case 'RESOLVE':
+      default:
+        return {
+          title: 'RESOLVE SPHERE',
+          average: resolveAvg,
+          description: 'FOCUS OF THE INNER VIGIL. GOVERNS ACTIVE SELF-DISCIPLINE, STREAK CONSISTENCY, DEEP WORK ATTENTION, AND SOVEREIGN COMMAND.',
+          color: COLORS.gothicGoldDim,
+          subStats: [
+            { label: 'DISCIPLINE', val: profile.stats?.discipline || 10, color: COLORS.gothicGoldDim },
+            { label: 'CONSISTENCY', val: profile.stats?.consistency || 10, color: COLORS.gothicGoldDim },
+            { label: 'FOCUS', val: profile.stats?.focus || 10, color: COLORS.gothicGoldDim },
+            { label: 'LEADERSHIP', val: profile.stats?.leadership || 10, color: COLORS.gothicGoldDim },
+          ],
+          skillKeywords: ['wake', 'time', 'habit', 'journal', 'discipline', 'dev']
+        };
+    }
+  };
+
+  const getRankName = (valNum: number) => {
+    if (valNum >= 90) return 'Master';
+    if (valNum >= 70) return 'Expert';
+    if (valNum >= 45) return 'Adept';
+    if (valNum >= 25) return 'Apprentice';
+    return 'Novice';
+  };
+
+  const activeSphereData = getActiveSphereData();
+  const unlockedInfluences = profile.skillTrees.flatMap(tree => 
+    tree.nodes.filter(node => 
+      node.status === 'unlocked' && 
+      activeSphereData.skillKeywords.some(keyword => node.id.includes(keyword) || node.name.toLowerCase().includes(keyword))
+    )
+  );
 
   const getRecognizedSkills = () => {
     const savedGoals = goals || [];
@@ -655,7 +777,7 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
   });
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
       
       {/* 1. CHARACTER CARD & PROFILE OVERVIEW HEADER */}
       {tab === 'The Wanderer' && (
@@ -850,39 +972,237 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
       {/* 3. ALCHEMICAL ATTRIBUTES GRID & EXAMINE SOUL */}
       {tab === 'The Wanderer' && (
         <View style={styles.row}>
-          {/* Attributes */}
+          {/* Constellation of Virtues */}
           <View style={[styles.card, { flex: 2 }]}>
-            <Text style={styles.cardHeaderTitle}>⚔️ CHARACTER ATTRIBUTES</Text>
-            <View style={styles.attrsList}>
-              {Object.entries(profile.stats).map(([statName, val]) => {
-                const valNum = val as number;
-                const label = statName.replace(/([A-Z])/g, ' $1').toUpperCase();
-                
-                let colorBar = COLORS.gothicGold;
-                if (['strength', 'endurance', 'discipline', 'recovery'].includes(statName)) {
-                  colorBar = COLORS.gothicCrimson;
-                } else if (statName === 'programming') {
-                  colorBar = COLORS.gothicSky;
-                }
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <Sparkles size={13} color={COLORS.gothicGold} />
+              <Text style={styles.cardHeaderTitle}>CONSTELLATION OF VIRTUES</Text>
+            </View>
+            <Text style={styles.cardHeaderSubtitle}>TAP A SPHERE NODE TO COMMUNE WITH ITS DOMINION</Text>
 
-                let rankName = 'Novice';
-                if (valNum >= 90) rankName = 'Master';
-                else if (valNum >= 70) rankName = 'Expert';
-                else if (valNum >= 45) rankName = 'Adept';
-                else if (valNum >= 25) rankName = 'Apprentice';
+            {/* Pure SVG Constellation — all icons drawn as SVG paths */}
+            <Svg width="100%" height={260} viewBox="0 0 320 260" style={{ marginVertical: 8 }}>
+              <Defs>
+                <RadialGradient id="soulGrad" cx="50%" cy="50%" r="50%">
+                  <Stop offset="0%" stopColor={COLORS.gothicGold} stopOpacity="0.25" />
+                  <Stop offset="100%" stopColor={COLORS.gothicGold} stopOpacity="0" />
+                </RadialGradient>
+                <RadialGradient id="vigorGrad" cx="50%" cy="50%" r="50%">
+                  <Stop offset="0%" stopColor={COLORS.gothicCrimson} stopOpacity="0.3" />
+                  <Stop offset="100%" stopColor={COLORS.gothicCrimson} stopOpacity="0" />
+                </RadialGradient>
+                <RadialGradient id="resolveGrad" cx="50%" cy="50%" r="50%">
+                  <Stop offset="0%" stopColor={COLORS.gothicGold} stopOpacity="0.3" />
+                  <Stop offset="100%" stopColor={COLORS.gothicGold} stopOpacity="0" />
+                </RadialGradient>
+                <RadialGradient id="cognitionGrad" cx="50%" cy="50%" r="50%">
+                  <Stop offset="0%" stopColor={COLORS.gothicSky} stopOpacity="0.3" />
+                  <Stop offset="100%" stopColor={COLORS.gothicSky} stopOpacity="0" />
+                </RadialGradient>
+                <RadialGradient id="charismaGrad" cx="50%" cy="50%" r="50%">
+                  <Stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+                  <Stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                </RadialGradient>
+              </Defs>
 
-                return (
-                  <View key={statName} style={styles.attrRow}>
+              {/* Faint diamond outer lines */}
+              <Line x1={160} y1={30} x2={295} y2={130} stroke="rgba(200,158,92,0.18)" strokeWidth={1} strokeDasharray="4,4" />
+              <Line x1={295} y1={130} x2={160} y2={230} stroke="rgba(200,158,92,0.18)" strokeWidth={1} strokeDasharray="4,4" />
+              <Line x1={160} y1={230} x2={25} y2={130} stroke="rgba(200,158,92,0.18)" strokeWidth={1} strokeDasharray="4,4" />
+              <Line x1={25} y1={130} x2={160} y2={30} stroke="rgba(200,158,92,0.18)" strokeWidth={1} strokeDasharray="4,4" />
+
+              {/* Active ray from center to selected node */}
+              <Line x1={160} y1={130} x2={160} y2={30}
+                stroke={activeSphere === 'RESOLVE' ? COLORS.gothicGold : 'rgba(200,158,92,0.12)'}
+                strokeWidth={activeSphere === 'RESOLVE' ? 2 : 1} />
+              <Line x1={160} y1={130} x2={25} y2={130}
+                stroke={activeSphere === 'VIGOR' ? COLORS.gothicCrimson : 'rgba(200,158,92,0.12)'}
+                strokeWidth={activeSphere === 'VIGOR' ? 2 : 1} />
+              <Line x1={160} y1={130} x2={295} y2={130}
+                stroke={activeSphere === 'COGNITION' ? COLORS.gothicSky : 'rgba(200,158,92,0.12)'}
+                strokeWidth={activeSphere === 'COGNITION' ? 2 : 1} />
+              <Line x1={160} y1={130} x2={160} y2={230}
+                stroke={activeSphere === 'CHARISMA' ? '#10b981' : 'rgba(200,158,92,0.12)'}
+                strokeWidth={activeSphere === 'CHARISMA' ? 2 : 1} />
+
+              {/* CENTER — Soul Core */}
+              <Circle cx={160} cy={130} r={40} fill="url(#soulGrad)" />
+              <AnimatedCircle cx={160} cy={130}
+                r={pulseAnim.interpolate({ inputRange: [1, 1.25], outputRange: [28, 38] })}
+                fill="none" stroke={COLORS.gothicGold} strokeWidth={0.8}
+                strokeOpacity={pulseAnim.interpolate({ inputRange: [1, 1.25], outputRange: [0.5, 0] })} />
+              <Circle cx={160} cy={130} r={28} fill="rgba(18,20,28,0.97)" stroke={COLORS.gothicGold} strokeWidth={1.5} />
+              <SvgText x={160} y={125} textAnchor="middle" fill={COLORS.gothicGold} fontSize="7.5" fontFamily={FONTS.mono} letterSpacing="1">SOUL CORE</SvgText>
+              <SvgText x={160} y={139} textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="bold" fontFamily={FONTS.mono}>LVL {Math.floor(profile.xp / 1000) + 1}</SvgText>
+
+              {/* TOP — RESOLVE node */}
+              <G onPress={() => { soundEngine.playClick(); setActiveSphere('RESOLVE'); }}>
+                {activeSphere === 'RESOLVE' && <Circle cx={160} cy={30} r={34} fill="url(#resolveGrad)" />}
+                <AnimatedCircle cx={160} cy={30}
+                  r={pulseAnim.interpolate({ inputRange: [1, 1.25], outputRange: [activeSphere === 'RESOLVE' ? 22 : 18, activeSphere === 'RESOLVE' ? 30 : 22] })}
+                  fill="none"
+                  stroke={activeSphere === 'RESOLVE' ? COLORS.gothicGold : 'rgba(200,158,92,0.2)'}
+                  strokeWidth={0.6}
+                  strokeOpacity={pulseAnim.interpolate({ inputRange: [1, 1.25], outputRange: [0.6, 0] })} />
+                <Circle cx={160} cy={30} r={20}
+                  fill={activeSphere === 'RESOLVE' ? 'rgba(200,158,92,0.2)' : 'rgba(18,20,28,0.9)'}
+                  stroke={activeSphere === 'RESOLVE' ? COLORS.gothicGold : 'rgba(200,158,92,0.35)'}
+                  strokeWidth={activeSphere === 'RESOLVE' ? 2 : 1} />
+                {/* Lightning bolt SVG path for RESOLVE */}
+                <Path d="M162,20 L157,30 L161,30 L158,40 L165,28 L161,28 Z"
+                  fill={activeSphere === 'RESOLVE' ? COLORS.gothicGold : 'rgba(200,158,92,0.5)'} />
+                <SvgText x={160} y={60} textAnchor="middle"
+                  fill={activeSphere === 'RESOLVE' ? '#ffffff' : COLORS.gray500}
+                  fontSize="8.5" fontWeight="bold" fontFamily={FONTS.mono} letterSpacing="1.5">RESOLVE</SvgText>
+                <SvgText x={160} y={70} textAnchor="middle"
+                  fill={activeSphere === 'RESOLVE' ? COLORS.gothicGold : COLORS.gray600}
+                  fontSize="7" fontFamily={FONTS.mono}>{resolveAvg}%</SvgText>
+              </G>
+
+              {/* LEFT — VIGOR node */}
+              <G onPress={() => { soundEngine.playClick(); setActiveSphere('VIGOR'); }}>
+                {activeSphere === 'VIGOR' && <Circle cx={25} cy={130} r={34} fill="url(#vigorGrad)" />}
+                <AnimatedCircle cx={25} cy={130}
+                  r={pulseAnim.interpolate({ inputRange: [1, 1.25], outputRange: [activeSphere === 'VIGOR' ? 22 : 18, activeSphere === 'VIGOR' ? 30 : 22] })}
+                  fill="none"
+                  stroke={activeSphere === 'VIGOR' ? COLORS.gothicCrimson : 'rgba(164,44,56,0.2)'}
+                  strokeWidth={0.6}
+                  strokeOpacity={pulseAnim.interpolate({ inputRange: [1, 1.25], outputRange: [0.6, 0] })} />
+                <Circle cx={25} cy={130} r={20}
+                  fill={activeSphere === 'VIGOR' ? 'rgba(164,44,56,0.25)' : 'rgba(18,20,28,0.9)'}
+                  stroke={activeSphere === 'VIGOR' ? COLORS.gothicCrimson : 'rgba(164,44,56,0.35)'}
+                  strokeWidth={activeSphere === 'VIGOR' ? 2 : 1} />
+                {/* Shield SVG path for VIGOR */}
+                <Path d="M25,119 L18,123 L18,131 Q18,138 25,141 Q32,138 32,131 L32,123 Z"
+                  fill={activeSphere === 'VIGOR' ? COLORS.gothicCrimson : 'rgba(164,44,56,0.5)'} />
+                <SvgText x={25} y={160} textAnchor="middle"
+                  fill={activeSphere === 'VIGOR' ? '#ffffff' : COLORS.gray500}
+                  fontSize="8.5" fontWeight="bold" fontFamily={FONTS.mono} letterSpacing="1.5">VIGOR</SvgText>
+                <SvgText x={25} y={170} textAnchor="middle"
+                  fill={activeSphere === 'VIGOR' ? COLORS.gothicCrimson : COLORS.gray600}
+                  fontSize="7" fontFamily={FONTS.mono}>{vigorAvg}%</SvgText>
+              </G>
+
+              {/* RIGHT — COGNITION node */}
+              <G onPress={() => { soundEngine.playClick(); setActiveSphere('COGNITION'); }}>
+                {activeSphere === 'COGNITION' && <Circle cx={295} cy={130} r={34} fill="url(#cognitionGrad)" />}
+                <AnimatedCircle cx={295} cy={130}
+                  r={pulseAnim.interpolate({ inputRange: [1, 1.25], outputRange: [activeSphere === 'COGNITION' ? 22 : 18, activeSphere === 'COGNITION' ? 30 : 22] })}
+                  fill="none"
+                  stroke={activeSphere === 'COGNITION' ? COLORS.gothicSky : 'rgba(56,189,248,0.2)'}
+                  strokeWidth={0.6}
+                  strokeOpacity={pulseAnim.interpolate({ inputRange: [1, 1.25], outputRange: [0.6, 0] })} />
+                <Circle cx={295} cy={130} r={20}
+                  fill={activeSphere === 'COGNITION' ? 'rgba(56,189,248,0.15)' : 'rgba(18,20,28,0.9)'}
+                  stroke={activeSphere === 'COGNITION' ? COLORS.gothicSky : 'rgba(56,189,248,0.35)'}
+                  strokeWidth={activeSphere === 'COGNITION' ? 2 : 1} />
+                {/* Open book SVG path for COGNITION */}
+                <Path d="M287,124 L287,136 Q291,134 295,135 Q299,134 303,136 L303,124 Q299,122 295,123 Q291,122 287,124 Z"
+                  fill="none" stroke={activeSphere === 'COGNITION' ? COLORS.gothicSky : 'rgba(56,189,248,0.5)'} strokeWidth={1.5} />
+                <Line x1={295} y1={124} x2={295} y2={136}
+                  stroke={activeSphere === 'COGNITION' ? COLORS.gothicSky : 'rgba(56,189,248,0.5)'} strokeWidth={1} />
+                <SvgText x={295} y={160} textAnchor="middle"
+                  fill={activeSphere === 'COGNITION' ? '#ffffff' : COLORS.gray500}
+                  fontSize="8.5" fontWeight="bold" fontFamily={FONTS.mono} letterSpacing="1.5">COGN.</SvgText>
+                <SvgText x={295} y={170} textAnchor="middle"
+                  fill={activeSphere === 'COGNITION' ? COLORS.gothicSky : COLORS.gray600}
+                  fontSize="7" fontFamily={FONTS.mono}>{cognitionAvg}%</SvgText>
+              </G>
+
+              {/* BOTTOM — CHARISMA node */}
+              <G onPress={() => { soundEngine.playClick(); setActiveSphere('CHARISMA'); }}>
+                {activeSphere === 'CHARISMA' && <Circle cx={160} cy={230} r={34} fill="url(#charismaGrad)" />}
+                <AnimatedCircle cx={160} cy={230}
+                  r={pulseAnim.interpolate({ inputRange: [1, 1.25], outputRange: [activeSphere === 'CHARISMA' ? 22 : 18, activeSphere === 'CHARISMA' ? 30 : 22] })}
+                  fill="none"
+                  stroke={activeSphere === 'CHARISMA' ? '#10b981' : 'rgba(16,185,129,0.2)'}
+                  strokeWidth={0.6}
+                  strokeOpacity={pulseAnim.interpolate({ inputRange: [1, 1.25], outputRange: [0.6, 0] })} />
+                <Circle cx={160} cy={230} r={20}
+                  fill={activeSphere === 'CHARISMA' ? 'rgba(16,185,129,0.2)' : 'rgba(18,20,28,0.9)'}
+                  stroke={activeSphere === 'CHARISMA' ? '#10b981' : 'rgba(16,185,129,0.35)'}
+                  strokeWidth={activeSphere === 'CHARISMA' ? 2 : 1} />
+                {/* Coin (double circle) for CHARISMA */}
+                <Circle cx={160} cy={230} r={8}
+                  fill="none" stroke={activeSphere === 'CHARISMA' ? '#10b981' : 'rgba(16,185,129,0.5)'} strokeWidth={1.5} />
+                <Circle cx={160} cy={230} r={4}
+                  fill={activeSphere === 'CHARISMA' ? '#10b981' : 'rgba(16,185,129,0.4)'} />
+                <SvgText x={160} y={205} textAnchor="middle"
+                  fill={activeSphere === 'CHARISMA' ? '#ffffff' : COLORS.gray500}
+                  fontSize="8.5" fontWeight="bold" fontFamily={FONTS.mono} letterSpacing="1.5">CHARISMA</SvgText>
+                <SvgText x={160} y={215} textAnchor="middle"
+                  fill={activeSphere === 'CHARISMA' ? '#10b981' : COLORS.gray600}
+                  fontSize="7" fontFamily={FONTS.mono}>{charismaAvg}%</SvgText>
+              </G>
+            </Svg>
+
+            {/* Horizontal pill sphere selector */}
+            <View style={styles.sphereSelectorRow}>
+              {([
+                { key: 'RESOLVE', label: 'RESOLVE', color: COLORS.gothicGold },
+                { key: 'VIGOR', label: 'VIGOR', color: COLORS.gothicCrimson },
+                { key: 'COGNITION', label: 'COGN.', color: COLORS.gothicSky },
+                { key: 'CHARISMA', label: 'CHARM.', color: '#10b981' },
+              ] as const).map(s => (
+                <TouchableOpacity
+                  key={s.key}
+                  onPress={() => { soundEngine.playClick(); setActiveSphere(s.key); }}
+                  style={[
+                    styles.spherePill,
+                    activeSphere === s.key && { borderColor: s.color, backgroundColor: `${s.color}18` }
+                  ]}
+                >
+                  <Text style={[styles.spherePillText, { color: activeSphere === s.key ? s.color : COLORS.gray500 }]}>
+                    {s.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Active sphere details panel */}
+            <View style={[styles.activeSpherePanel, { borderColor: `${activeSphereData.color}55` }]}>
+              <View style={styles.activeSphereHeader}>
+                <Text style={[styles.activeSphereTitle, { color: activeSphereData.color }]}>
+                  {activeSphereData.title}
+                </Text>
+                <View style={[styles.sphereAvgBadge, { borderColor: `${activeSphereData.color}55`, backgroundColor: `${activeSphereData.color}12` }]}>
+                  <Text style={[styles.activeSphereAvgText, { color: activeSphereData.color }]}>
+                    AVG {activeSphereData.average}%
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.activeSphereDesc}>{activeSphereData.description}</Text>
+
+              <View style={styles.activeSubStatsList}>
+                {activeSphereData.subStats.map(stat => (
+                  <View key={stat.label} style={styles.attrRow}>
                     <View style={styles.attrHeader}>
-                      <Text style={styles.attrLabel}>{label}</Text>
-                      <Text style={styles.attrRank}>{rankName} ({valNum}/100)</Text>
+                      <Text style={styles.attrLabel}>{stat.label}</Text>
+                      <Text style={styles.attrRank}>{getRankName(stat.val)} · {stat.val}/100</Text>
                     </View>
                     <View style={styles.attrTrack}>
-                      <View style={[styles.attrFill, { backgroundColor: colorBar, width: `${valNum}%` }]} />
+                      <View style={[styles.attrFill, { backgroundColor: stat.color, width: `${stat.val}%` }]} />
                     </View>
                   </View>
-                );
-              })}
+                ))}
+              </View>
+
+              <View style={styles.influencesSection}>
+                <Text style={styles.influencesHeading}>✦ REALIZED SKILL INFLUENCES</Text>
+                {unlockedInfluences.length > 0 ? (
+                  <View style={styles.influencesList}>
+                    {unlockedInfluences.map(node => (
+                      <View key={node.id} style={styles.influencePill}>
+                        <Text style={styles.influencePillText}>{node.name.toUpperCase()}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.noInfluencesText}>
+                    No covenants unlocked in this sphere. Master nodes in the Codex to awaken these attributes.
+                  </Text>
+                )}
+              </View>
             </View>
           </View>
 
@@ -994,7 +1314,37 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
         </View>
       )}
 
-      {/* 5. ULTIMATE PENANCE WIPE */}
+      {/* 5. SYSTEM CONFIGURATION */}
+      {tab === 'The Wanderer' && (
+        <View style={styles.card}>
+          <Text style={styles.cardHeaderTitle}>⚙️ COVENANT CONFIGURATION</Text>
+          <Text style={styles.cardHeaderSubtitle}>MANAGE THY AMBIENT PRESENCE & DEPARTURE</Text>
+          <View style={styles.settingsRow}>
+            {onToggleAudio && (
+              <TouchableOpacity
+                onPress={onToggleAudio}
+                style={styles.settingsBtn}
+              >
+                <Text style={styles.settingsBtnText}>
+                  {audioEnabled ? '🔊 AMBIENT: ON' : '🔇 AMBIENT: MUTED'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {onLogout && (
+              <TouchableOpacity
+                onPress={onLogout}
+                style={[styles.settingsBtn, { borderColor: COLORS.gothicCrimson }]}
+              >
+                <Text style={[styles.settingsBtnText, { color: COLORS.gothicCrimson }]}>
+                  † DEPART COMMUNION †
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* 6. ULTIMATE PENANCE WIPE */}
       {tab === 'The Wanderer' && (
         <View style={styles.purgeCard}>
           <View style={{ flex: 1 }}>
@@ -1016,73 +1366,88 @@ export const GothicProfile: React.FC<GothicProfileProps> = ({
       )}
 
       {/* SELECTED SKILL COVENANT OVERLAY MODAL */}
-      {selectedSkill && (
+      <Modal
+        visible={!!selectedSkill}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedSkill(null)}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={[styles.modalCorner, { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 }]} />
-            <View style={[styles.modalCorner, { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 }]} />
-            <View style={[styles.modalCorner, { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 }]} />
-            <View style={[styles.modalCorner, { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 }]} />
+          {selectedSkill && (
+            <View style={styles.modalCard}>
+              <View style={[styles.modalCorner, { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 }]} />
+              <View style={[styles.modalCorner, { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 }]} />
+              <View style={[styles.modalCorner, { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 }]} />
+              <View style={[styles.modalCorner, { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 }]} />
 
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalHeaderLabel}>🛡️ VERIFIED GROWTH SPHERE</Text>
-                <Text style={styles.modalHeaderTitle}>{selectedSkill.name.toUpperCase()}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setSelectedSkill(null)} style={styles.modalCloseBtn}>
-                <Text style={styles.modalCloseBtnText}>[ DISMISS ]</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginVertical: 12 }}>
-              <View style={styles.modalStatsRow}>
-                <View style={styles.modalStatBox}>
-                  <Text style={styles.modalStatLabel}>LIFECYCLE STAGE</Text>
-                  <Text style={styles.modalStatVal}>★ {selectedSkill.status.toUpperCase()}</Text>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalHeaderLabel}>VERIFIED GROWTH SPHERE</Text>
+                  <Text style={styles.modalHeaderTitle}>{selectedSkill.name.toUpperCase()}</Text>
                 </View>
-                <View style={styles.modalStatBox}>
-                  <Text style={styles.modalStatLabel}>ORACLE SCORE</Text>
-                  <Text style={styles.modalStatVal}>TIER {selectedSkill.level} ({selectedSkill.mastery}%)</Text>
-                </View>
+                <TouchableOpacity onPress={() => setSelectedSkill(null)} style={styles.modalCloseBtn}>
+                  <Text style={styles.modalCloseBtnText}>[ DISMISS ]</Text>
+                </TouchableOpacity>
               </View>
 
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>DEMONSTRATED EVIDENCE</Text>
-                <View style={styles.modalSectionBox}>
-                  {selectedSkill.evidenceList.map((ev: string, idx: number) => (
-                    <Text key={idx} style={styles.modalEvidenceText}>† {ev.toUpperCase()}</Text>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>RELATED ATTRIBUTES</Text>
-                <View style={styles.attributesListRow}>
-                  {selectedSkill.contributesTo.map((stat: string) => (
-                    <View key={stat} style={styles.modalAttrPill}>
-                      <Text style={styles.modalAttrPillText}>{stat.toUpperCase()} +RANK</Text>
-                    </View>
-                  ))}
-                  <View style={[styles.modalAttrPill, { backgroundColor: 'rgba(56, 189, 248, 0.1)' }]}>
-                    <Text style={[styles.modalAttrPillText, { color: COLORS.gothicSky }]}>CONFIDENCE: {selectedSkill.aiConfidence}</Text>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginVertical: 12 }}>
+                <View style={styles.modalStatsRow}>
+                  <View style={styles.modalStatBox}>
+                    <Text style={styles.modalStatLabel}>LIFECYCLE STAGE</Text>
+                    <Text style={styles.modalStatVal}>{selectedSkill.status.toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.modalStatBox}>
+                    <Text style={styles.modalStatLabel}>ORACLE SCORE</Text>
+                    <Text style={styles.modalStatVal}>TIER {selectedSkill.level} ({selectedSkill.mastery}%)</Text>
                   </View>
                 </View>
-              </View>
 
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>SCRIBE'S AI ASSESSMENT</Text>
-                <View style={[styles.modalSectionBox, { borderColor: COLORS.gothicGold }]}>
-                  <Text style={styles.modalAssessmentText}>{selectedSkill.assessment.toUpperCase()}</Text>
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>DEMONSTRATED EVIDENCE</Text>
+                  <View style={styles.modalSectionBox}>
+                    {selectedSkill.evidenceList.map((ev: string, idx: number) => (
+                      <Text key={idx} style={styles.modalEvidenceText}>† {ev.toUpperCase()}</Text>
+                    ))}
+                  </View>
                 </View>
-              </View>
-            </ScrollView>
 
-            <TouchableOpacity onPress={() => setSelectedSkill(null)} style={styles.modalSubmitBtn}>
-              <Text style={styles.modalSubmitBtnText}>CLOSE SCROLL OF ASSESS</Text>
-            </TouchableOpacity>
-          </View>
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>RELATED ATTRIBUTES</Text>
+                  <View style={styles.attributesListRow}>
+                    {selectedSkill.contributesTo.map((stat: string) => (
+                      <View key={stat} style={styles.modalAttrPill}>
+                        <Text style={styles.modalAttrPillText}>{stat.toUpperCase()} +RANK</Text>
+                      </View>
+                    ))}
+                    <View style={[styles.modalAttrPill, { backgroundColor: 'rgba(56, 189, 248, 0.1)' }]}>
+                      <Text style={[styles.modalAttrPillText, { color: COLORS.gothicSky }]}>CONFIDENCE: {selectedSkill.aiConfidence}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>SCRIBE'S AI ASSESSMENT</Text>
+                  <View style={[styles.modalSectionBox, { borderColor: COLORS.gothicGold }]}>
+                    <Text style={styles.modalAssessmentText}>{selectedSkill.assessment.toUpperCase()}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity onPress={() => setSelectedSkill(null)} style={styles.modalSubmitBtn}>
+                <Text style={styles.modalSubmitBtnText}>CLOSE SCROLL OF ASSESS</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-      )}
+      </Modal>
+
+      {/* Footer info */}
+      <View style={styles.footer}>
+        <Text style={styles.footerTitle}>† SORROWFUL BE THE HEART, PENITENT ASHEN KNIGHT †</Text>
+        <Text style={styles.footerText}>
+          ICARUS • STANDALONE MOBILE PROGRESSION ENGINE
+        </Text>
+      </View>
 
     </ScrollView>
   );
@@ -1150,7 +1515,7 @@ const styles = StyleSheet.create({
   },
   characterTitle: {
     fontFamily: FONTS.cinzel,
-    fontSize: 9.5,
+    fontSize: 11.5,
     color: COLORS.gothicGold,
     letterSpacing: 0.5,
     fontWeight: 'bold',
@@ -1166,12 +1531,12 @@ const styles = StyleSheet.create({
   },
   xpLabel: {
     fontFamily: FONTS.mono,
-    fontSize: 8,
-    color: COLORS.gray500,
+    fontSize: 10.5,
+    color: COLORS.gray300,
   },
   xpValue: {
     fontFamily: FONTS.mono,
-    fontSize: 8,
+    fontSize: 10.5,
     color: COLORS.gothicGold,
     fontWeight: 'bold',
   },
@@ -1239,14 +1604,14 @@ const styles = StyleSheet.create({
   },
   hudValText: {
     fontFamily: FONTS.mono,
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: 'bold',
     color: COLORS.gothicGold,
   },
   hudLblText: {
     fontFamily: FONTS.mono,
-    fontSize: 7,
-    color: COLORS.gray500,
+    fontSize: 8.5,
+    color: COLORS.gray300,
     marginTop: 2,
   },
   cardHeaderRow: {
@@ -1265,8 +1630,8 @@ const styles = StyleSheet.create({
   },
   cardHeaderSubtitle: {
     fontFamily: FONTS.mono,
-    fontSize: 7.5,
-    color: COLORS.gray500,
+    fontSize: 9.5,
+    color: COLORS.gray300,
   },
   subTabRow: {
     flexDirection: 'row',
@@ -1480,22 +1845,23 @@ const styles = StyleSheet.create({
   },
   attrLabel: {
     fontFamily: FONTS.mono,
-    fontSize: 7.5,
-    color: COLORS.gray400,
+    fontSize: 10.5,
+    color: '#fff',
     fontWeight: 'bold',
   },
   attrRank: {
     fontFamily: FONTS.mono,
-    fontSize: 7.5,
-    color: COLORS.gray500,
+    fontSize: 10,
+    color: COLORS.gothicGold,
+    fontWeight: 'bold',
   },
   attrTrack: {
-    height: 6,
+    height: 8,
     backgroundColor: COLORS.gothicDark,
-    borderRadius: 3,
+    borderRadius: 4,
     overflow: 'hidden',
     borderWidth: 0.5,
-    borderColor: 'rgba(46, 50, 62, 0.2)',
+    borderColor: 'rgba(46, 50, 62, 0.3)',
   },
   attrFill: {
     height: '100%',
@@ -1799,6 +2165,170 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: 'bold',
     color: COLORS.gothicGold,
-  }
+  },
+  footer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(46, 50, 62, 0.2)',
+    marginTop: 20,
+    gap: 4,
+  },
+  footerTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 8.5,
+    color: '#8b8a85',
+    letterSpacing: 0.5,
+  },
+  footerText: {
+    fontFamily: FONTS.mono,
+    fontSize: 7.5,
+    color: COLORS.gray600,
+    letterSpacing: 1,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  settingsBtn: {
+    flex: 1,
+    height: 38,
+    borderWidth: 1,
+    borderColor: COLORS.gothicBorder,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  constellationWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 12,
+  },
+  activeSpherePanel: {
+    marginTop: 16,
+    padding: 14,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 12,
+  },
+  activeSphereHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(46, 50, 62, 0.3)',
+    paddingBottom: 8,
+  },
+  activeSphereTitle: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  activeSphereAvgText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9.5,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  activeSphereDesc: {
+    fontFamily: FONTS.cinzel,
+    fontSize: 11,
+    color: COLORS.gray400,
+    lineHeight: 16,
+    fontStyle: 'italic',
+  },
+  activeSubStatsList: {
+    gap: 10,
+    marginVertical: 4,
+  },
+  influencesSection: {
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(46, 50, 62, 0.3)',
+    paddingTop: 10,
+    gap: 8,
+  },
+  influencesHeading: {
+    fontFamily: FONTS.mono,
+    fontSize: 8.5,
+    color: COLORS.gothicGoldDim,
+    letterSpacing: 0.5,
+  },
+  influencesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  influencePill: {
+    backgroundColor: 'rgba(200, 158, 92, 0.08)',
+    borderColor: 'rgba(200, 158, 92, 0.25)',
+    borderWidth: 0.5,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  influencePillText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gothicGold,
+  },
+  noInfluencesText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    color: COLORS.gray600,
+    lineHeight: 12,
+    textTransform: 'uppercase',
+  },
+  constelIcon: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  constellationContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 12,
+  },
+  sphereSelectorRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 12,
+  },
+  spherePill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(46,50,62,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  spherePillText: {
+    fontFamily: FONTS.mono,
+    fontSize: 8,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  sphereAvgBadge: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
 });
 export default GothicProfile;
