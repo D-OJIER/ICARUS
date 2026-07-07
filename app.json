@@ -12,16 +12,33 @@
       "backgroundColor": "#0a0b0d"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.reijo23124.icarus",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0b0d"
-      }
+      },
+      "package": "com.reijo23124.icarus"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "17cbd158-88ff-4bd1-b88a-f6018f6d3c56"
+      }
+    },
+    "owner": "reijo23124",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/17cbd158-88ff-4bd1-b88a-f6018f6d3c56"
     }
   }
 }
