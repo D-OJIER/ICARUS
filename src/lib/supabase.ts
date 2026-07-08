@@ -2,11 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import { Goal, Quest } from '../types';
 import { nativeStorage } from '../utils/nativeStorage';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder-project.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase environment variables are not configured.');
+if (!process.env.EXPO_PUBLIC_SUPABASE_URL || !process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
+  console.warn('Supabase environment variables are not configured. Using placeholder configuration to prevent crash.');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

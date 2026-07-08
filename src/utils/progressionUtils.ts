@@ -1,5 +1,6 @@
 import { QuestDifficulty, QuestCategory, Quest } from '../types';
 import { getLocalDateString, getTodayLocalDateString } from './dateUtils';
+import { nativeStorage } from './nativeStorage';
 
 export interface CharacterStats {
   strength: number;
@@ -219,7 +220,7 @@ const DEFAULT_PROFILE: CharacterProfile = {
 
 export function getCurrentUserScopedKey(baseKey: string): string {
   try {
-    const savedUser = localStorage.getItem('gothic_current_user');
+    const savedUser = nativeStorage.getItem('gothic_current_user');
     if (savedUser) {
       const u = JSON.parse(savedUser);
       if (u.id) {
@@ -238,7 +239,7 @@ export function getDefaultProfileForCurrentUser(): CharacterProfile {
   let userId = '';
   
   try {
-    const savedUser = localStorage.getItem('gothic_current_user');
+    const savedUser = nativeStorage.getItem('gothic_current_user');
     if (savedUser) {
       const u = JSON.parse(savedUser);
       if (u.display_name) name = u.display_name;
@@ -295,7 +296,7 @@ export function getDefaultProfileForCurrentUser(): CharacterProfile {
 // Retrieve character profile from localStorage with proper player scoping
 export function getCharacterProfile(): CharacterProfile {
   const key = getCurrentUserScopedKey('gothic_character_profile');
-  const data = localStorage.getItem(key);
+  const data = nativeStorage.getItem(key);
   if (data) {
     try {
       const parsed = JSON.parse(data);
@@ -324,11 +325,11 @@ export function getCharacterProfile(): CharacterProfile {
 // Persist change scoped to active participant in localStorage database
 export function saveCharacterProfile(profile: CharacterProfile) {
   const key = getCurrentUserScopedKey('gothic_character_profile');
-  localStorage.setItem(key, JSON.stringify(profile));
+  nativeStorage.setItem(key, JSON.stringify(profile));
 
   // Also propagate sync update to currently cached user context
   try {
-    const savedUser = localStorage.getItem('gothic_current_user');
+    const savedUser = nativeStorage.getItem('gothic_current_user');
     if (savedUser) {
       const u = JSON.parse(savedUser);
       u.characterProfile = profile;
@@ -336,7 +337,7 @@ export function saveCharacterProfile(profile: CharacterProfile) {
       u.level = Math.floor((profile.xp || 0) / 1000) + 1;
       u.title = profile.title || u.title;
       u.streak = profile.streak || 0;
-      localStorage.setItem('gothic_current_user', JSON.stringify(u));
+      nativeStorage.setItem('gothic_current_user', JSON.stringify(u));
     }
   } catch (e) {
     console.error("Error propagating profile sync inside local state", e);
@@ -585,6 +586,8 @@ export function addChronicleLog(profile: CharacterProfile, text: string) {
 
 // Master global purge & complete database wipe of ICARUS Local state
 export function purgePerfectGothicState() {
-  localStorage.clear();
-  sessionStorage.clear();
+  nativeStorage.clear();
+  if (typeof (global as any).sessionStorage?.clear === 'function') {
+    (global as any).sessionStorage.clear();
+  }
 }

@@ -79,20 +79,20 @@ export default function App() {
     async function loadStorage() {
       await nativeStorage.init();
       
-      const savedUserStr = localStorage.getItem('gothic_current_user');
+      const savedUserStr = nativeStorage.getItem('gothic_current_user');
       if (savedUserStr) {
         const u = JSON.parse(savedUserStr);
         setCurrentUser(u);
 
-        const savedQuests = localStorage.getItem('gothic_quests_' + u.id);
+        const savedQuests = nativeStorage.getItem('gothic_quests_' + u.id);
         if (savedQuests) setQuests(JSON.parse(savedQuests));
         else setQuests(u.quests || []);
 
-        const savedGoals = localStorage.getItem('gothic_goals_' + u.id);
+        const savedGoals = nativeStorage.getItem('gothic_goals_' + u.id);
         if (savedGoals) setGoals(JSON.parse(savedGoals));
         else setGoals(u.goals || []);
 
-        const savedProfile = localStorage.getItem('gothic_character_profile_' + u.id);
+        const savedProfile = nativeStorage.getItem('gothic_character_profile_' + u.id);
         if (savedProfile) setCharacterProfile(JSON.parse(savedProfile));
         else setCharacterProfile(u.characterProfile || getCharacterProfile());
       } else {
@@ -105,36 +105,36 @@ export default function App() {
 
   // Auth Portal Dynamic Login Handlers
   const handleLoginSuccess = (userData: any) => {
-    localStorage.setItem('gothic_current_user', JSON.stringify(userData));
+    nativeStorage.setItem('gothic_current_user', JSON.stringify(userData));
     
-    const userQuests = localStorage.getItem('gothic_quests_' + userData.id);
+    const userQuests = nativeStorage.getItem('gothic_quests_' + userData.id);
     const resolvedQuests = userQuests ? JSON.parse(userQuests) : (userData.quests || []);
     setQuests(resolvedQuests);
-    localStorage.setItem('gothic_quests_' + userData.id, JSON.stringify(resolvedQuests));
+    nativeStorage.setItem('gothic_quests_' + userData.id, JSON.stringify(resolvedQuests));
 
-    const userGoals = localStorage.getItem('gothic_goals_' + userData.id);
+    const userGoals = nativeStorage.getItem('gothic_goals_' + userData.id);
     const resolvedGoals = userGoals ? JSON.parse(userGoals) : (userData.goals || []);
     setGoals(resolvedGoals);
-    localStorage.setItem('gothic_goals_' + userData.id, JSON.stringify(resolvedGoals));
+    nativeStorage.setItem('gothic_goals_' + userData.id, JSON.stringify(resolvedGoals));
 
-    const userProfile = localStorage.getItem('gothic_character_profile_' + userData.id);
+    const userProfile = nativeStorage.getItem('gothic_character_profile_' + userData.id);
     const resolvedProfile = userProfile ? JSON.parse(userProfile) : userData.characterProfile;
     setCharacterProfile(resolvedProfile);
-    localStorage.setItem('gothic_character_profile_' + userData.id, JSON.stringify(resolvedProfile));
+    nativeStorage.setItem('gothic_character_profile_' + userData.id, JSON.stringify(resolvedProfile));
     
     setCurrentUser(userData);
   };
 
   const handleLogout = () => {
     soundEngine.playClick();
-    localStorage.removeItem('gothic_current_user');
+    nativeStorage.removeItem('gothic_current_user');
     setCurrentUser(null);
   };
 
   // Safe client-side persistence and secure background synchronizer triggers
   useEffect(() => {
     if (!currentUser || !isStorageReady) return;
-    localStorage.setItem('gothic_quests_' + currentUser.id, JSON.stringify(quests));
+    nativeStorage.setItem('gothic_quests_' + currentUser.id, JSON.stringify(quests));
     
     const timer = setTimeout(async () => {
       try {
@@ -149,7 +149,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser || !isStorageReady) return;
-    localStorage.setItem('gothic_goals_' + currentUser.id, JSON.stringify(goals));
+    nativeStorage.setItem('gothic_goals_' + currentUser.id, JSON.stringify(goals));
     
     const total = goals.length;
     const completed = goals.filter(g => g.status === 'Triumphant').length;
@@ -168,7 +168,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser || !characterProfile || !isStorageReady) return;
-    localStorage.setItem('gothic_character_profile_' + currentUser.id, JSON.stringify(characterProfile));
+    nativeStorage.setItem('gothic_character_profile_' + currentUser.id, JSON.stringify(characterProfile));
 
     const timer = setTimeout(async () => {
       try {
@@ -203,29 +203,29 @@ export default function App() {
     };
   }, [audioEnabled, isResting]);
 
-  const actualStreak = calculateActualStreak(quests);
+  const actualStreak = isStorageReady ? calculateActualStreak(quests) : 0;
 
-  const dayContext = calculateDayContext(
+  const dayContext = isStorageReady && characterProfile ? calculateDayContext(
     new Date(),
     goals,
     quests,
     actualStreak,
-    characterProfile || getCharacterProfile()
-  );
+    characterProfile
+  ) : null;
 
   useEffect(() => {
-    if (!characterProfile) return;
+    if (!characterProfile || !dayContext) return;
     const contextQuote = getContextAwareQuote(dayContext, characterProfile);
     setRandomQuote(contextQuote);
-  }, [goals, quests, characterProfile?.xp, actualStreak]);
+  }, [goals, quests, characterProfile?.xp, actualStreak, dayContext]);
 
   useEffect(() => {
-    if (currentUser && characterProfile && characterProfile.streak !== actualStreak) {
+    if (isStorageReady && currentUser && characterProfile && characterProfile.streak !== actualStreak) {
       const updated = { ...characterProfile, streak: actualStreak };
       setCharacterProfile(updated);
       saveCharacterProfile(updated);
     }
-  }, [actualStreak, currentUser, characterProfile]);
+  }, [actualStreak, currentUser, characterProfile, isStorageReady]);
 
   // Add new task
   const handleAddQuest = (questData: {
