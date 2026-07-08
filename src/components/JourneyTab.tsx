@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { BookOpen, Skull, Swords, Flame, Clock } from 'lucide-react-native';
 import { Quest } from '../types';
-import { ProceduralRuinBanner } from './ProceduralRuinBanner';
 import { GothicQuestItem } from './GothicQuestItem';
 import { getTodayLocalDateString } from '../utils/dateUtils';
 import { DayContext } from '../utils/contextAwareEngine';
@@ -57,14 +56,6 @@ export const JourneyTab: React.FC<JourneyTabProps> = ({
 
   return (
     <ScrollView style={styles.viewport} contentContainerStyle={{ paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
-      
-      {/* 1. Daily Procedural Ancient Ruin Hero Banner */}
-      <ProceduralRuinBanner 
-        dayContext={dayContext}
-        userLevel={userLevel}
-        streak={streak}
-      />
-
       {/* 2. Quote of the Hour Card */}
       <View style={styles.quoteCard}>
         <View style={[styles.corner, { top: 0, left: 0, borderTopWidth: 1, borderLeftWidth: 1 }]} />
